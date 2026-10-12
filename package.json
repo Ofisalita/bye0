@@ -1,0 +1,12 @@
+{
+	"name": "bye0",
+	"private": true,
+	"license": "WTFPL",
+	"workspaces": ["packages/*", "apps/*"],
+	"scripts": {
+		"dev:server": "bun --filter @bye0/server dev",
+		"dev:web": "bun --filter @bye0/web dev",
+		"test": "bun test packages apps/server",
+		"check": "bun --filter '*' check"
+	}
+}
