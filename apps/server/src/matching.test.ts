@@ -7,10 +7,13 @@ const YOUTUBE = 'https://youtu.be/FGBhQbmPwH8';
 const LIVE = 'https://www.youtube.com/live/jfKfPfyJRdk';
 
 /** Answers like nidol's walking skeleton does. */
+/** The last request body nidol got. */
+let asked: Record<string, unknown> = {};
 const nidol = Bun.serve({
 	port: 0,
 	async fetch(req) {
-		const { input } = (await req.json()) as { input: string };
+		asked = (await req.json()) as Record<string, unknown>;
+		const input = asked.input;
 		if (input === SPOTIFY)
 			return Response.json({
 				canonical: { isrc: null, mbid: null, title: 'One More Time', artists: ['Daft Punk'], durationMs: 320357 },
@@ -34,7 +37,7 @@ const nidol = Bun.serve({
 afterAll(() => nidol.stop(true));
 
 const viaFallback: Resolver = async (input) => ({ title: `fallback ${input}`, artists: [], durationMs: 0, candidates: [] });
-const resolve = matchingService(nidol.url.href, viaFallback);
+const resolve = matchingService(nidol.url.href, { country: 'CL', fallback: viaFallback });
 
 test('a Spotify track comes back with ranked candidates, unknowns as 0 / empty', async () => {
 	expect(await resolve(SPOTIFY)).toEqual({
@@ -54,6 +57,15 @@ test('a live stream says so', async () => {
 	expect(await resolve(LIVE)).toMatchObject({ durationMs: 0, isLive: true });
 });
 
+test('sends the country and the party\'s audio preference along', async () => {
+	await resolve(SPOTIFY);
+	expect(asked).toEqual({ input: SPOTIFY, target: 'youtube', country: 'CL', preferAudio: false });
+	await resolve(SPOTIFY, { preferAudio: true });
+	expect(asked).toMatchObject({ preferAudio: true });
+	await matchingService(nidol.url.href)(SPOTIFY);
+	expect(asked).not.toHaveProperty('country');
+});
+
 test('errors: collections, outages and everything else', async () => {
 	expect(await resolve(ALBUM)).toBe('collection');
 	expect(await resolve('down')).toBe('matching-unavailable');
@@ -65,7 +77,7 @@ test('YouTube links nidol refuses go to the fallback', async () => {
 });
 
 test('with nidol unreachable, YouTube links still resolve and the rest say so', async () => {
-	const offline = matchingService('http://127.0.0.1:1', viaFallback);
+	const offline = matchingService('http://127.0.0.1:1', { fallback: viaFallback });
 	expect(await offline(YOUTUBE)).toMatchObject({ title: `fallback ${YOUTUBE}` });
 	expect(await offline(SPOTIFY)).toBe('matching-unavailable');
 });

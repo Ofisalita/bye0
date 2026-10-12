@@ -6,6 +6,10 @@ import { Registry } from './registry';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const MATCHING_URL = process.env.MATCHING_URL;
+/** ISO 3166-1 alpha-2 code the matching service localizes searches to, e.g. CL. */
+const MATCHING_COUNTRY = process.env.MATCHING_COUNTRY?.toUpperCase() || undefined;
+if (MATCHING_COUNTRY && !/^[A-Z]{2}$/.test(MATCHING_COUNTRY))
+	throw new Error(`MATCHING_COUNTRY must be a two-letter country code like CL, got "${MATCHING_COUNTRY}"`);
 const MAX_INPUT_LENGTH = 500;
 
 interface Conn {
@@ -17,7 +21,7 @@ interface Conn {
 type Socket = ServerWebSocket<Conn>;
 
 const registry = new Registry();
-const resolveTrack = MATCHING_URL ? matchingService(MATCHING_URL) : youtubeOnly;
+const resolveTrack = MATCHING_URL ? matchingService(MATCHING_URL, { country: MATCHING_COUNTRY }) : youtubeOnly;
 const sockets = new Map<string, Socket>();
 
 const topic = (party: Party) => `party:${party.id}`;
@@ -93,7 +97,7 @@ async function handle(ws: Socket, msg: ClientMessage) {
 			if (limited) return fail(ws, limited);
 			if (typeof msg.input !== 'string' || !msg.input.trim() || msg.input.length > MAX_INPUT_LENGTH)
 				return fail(ws, 'bad-request');
-			const track = await resolveTrack(msg.input).catch((err): ErrorCode => {
+			const track = await resolveTrack(msg.input, { preferAudio: party.settings.preferAudio }).catch((err): ErrorCode => {
 				console.error('resolve failed:', err);
 				return 'unresolvable';
 			});
@@ -189,4 +193,6 @@ setInterval(() => {
 	for (const party of expired) server.publish(topic(party), JSON.stringify({ t: 'ended' } satisfies ServerMessage));
 }, 5_000);
 
-console.log(`bye0 room server on :${server.port} (${MATCHING_URL ? `matching: ${MATCHING_URL}` : 'no MATCHING_URL: YouTube links only'})`);
+console.log(
+	`bye0 room server on :${server.port} (${MATCHING_URL ? `matching: ${MATCHING_URL}, country: ${MATCHING_COUNTRY ?? 'none'}` : 'no MATCHING_URL: YouTube links only'})`
+);

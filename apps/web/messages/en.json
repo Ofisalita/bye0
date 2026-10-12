@@ -46,6 +46,7 @@
 	"governance_presidential_democracy": "Presidential democracy (the host can override)",
 	"skip_threshold": "Votes needed to skip: {percent}%",
 	"show_attribution": "Show who added each song",
+	"prefer_audio": "Play the audio version of pasted music videos",
 	"add_cooldown": "Time between one guest's songs",
 	"add_cooldown_off": "No wait",
 	"add_cooldown_wait": "You can add another song in {seconds} s.",

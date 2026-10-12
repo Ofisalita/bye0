@@ -247,6 +247,14 @@
 				<label class="row">
 					<input
 						type="checkbox"
+						checked={s.settings.preferAudio}
+						onchange={(e) => party.send({ t: 'settings', patch: { preferAudio: e.currentTarget.checked } })}
+					/>
+					{m.prefer_audio()}
+				</label>
+				<label class="row">
+					<input
+						type="checkbox"
 						checked={s.settings.showAttribution}
 						onchange={(e) => party.send({ t: 'settings', patch: { showAttribution: e.currentTarget.checked } })}
 					/>

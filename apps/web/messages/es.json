@@ -46,6 +46,7 @@
 	"governance_presidential_democracy": "Democracia presidencial (el anfitrión puede imponerse)",
 	"skip_threshold": "Votos necesarios para saltar: {percent}%",
 	"show_attribution": "Mostrar quién agregó cada canción",
+	"prefer_audio": "Usar la versión de audio de los videoclips pegados",
 	"add_cooldown": "Tiempo entre canciones de una misma persona",
 	"add_cooldown_off": "Sin espera",
 	"add_cooldown_wait": "Puedes agregar otra canción en {seconds} s.",

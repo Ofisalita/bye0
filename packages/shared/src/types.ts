@@ -61,6 +61,8 @@ export interface PartySettings {
 	maxQueuedPerGuest: number | null;
 	/** Minimum time between two songs from the same guest. */
 	addCooldownMs: number | null;
+	/** For pasted YouTube music videos, play the official audio upload instead (nidol D7). */
+	preferAudio: boolean;
 }
 
 /** What strategies get to look at. */
@@ -95,7 +97,8 @@ export const DEFAULT_SETTINGS: PartySettings = {
 	showAttribution: true,
 	maxDurationMs: 10 * 60_000,
 	maxQueuedPerGuest: null,
-	addCooldownMs: null
+	addCooldownMs: null,
+	preferAudio: false
 };
 
 export interface Preset {

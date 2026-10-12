@@ -16,6 +16,8 @@ services:
       target: server
     environment:
       MATCHING_URL: http://nidol:8000
+      # Where nidol localizes its searches (ISO 3166-1 alpha-2).
+      MATCHING_COUNTRY: CL
     restart: unless-stopped
 
   nidol:
