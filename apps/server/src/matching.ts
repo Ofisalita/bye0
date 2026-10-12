@@ -1,4 +1,4 @@
-import type { ErrorCode } from '@bye0/shared';
+import type { ErrorCode, SearchResult } from '@bye0/shared';
 import type { CollectionTrack, ResolvedTrack } from './party';
 
 const TIMEOUT_MS = 8_000;
@@ -126,6 +126,35 @@ export function collectionExpander(baseUrl: string): Expander {
 			artists: t.artists,
 			durationMs: t.durationMs ?? 0,
 			source: t.source.url
+		}));
+	};
+}
+
+export type Searcher = (q: string) => Promise<SearchResult[] | ErrorCode>;
+
+/** The parts of nidol's `GET /search` response we use. */
+interface SearchResponse {
+	results: { title: string; artists: string[]; durationMs: number | null; artworkUrl?: string | null; source: { url: string } }[];
+}
+
+/**
+ * Finds songs by name through nidol's `GET /search` (nidol D8). Any failure, including a nidol
+ * without /search yet, is `matching-unavailable`: guests are asked to paste a link instead (D6).
+ */
+export function songSearch(baseUrl: string, { country }: { country?: string } = {}): Searcher {
+	return async (q) => {
+		const url = new URL('/search', baseUrl);
+		url.searchParams.set('q', q);
+		if (country) url.searchParams.set('country', country);
+		const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+		if (!res.ok) return 'matching-unavailable';
+		const body = (await res.json()) as SearchResponse;
+		return body.results.map((r) => ({
+			title: r.title,
+			artists: r.artists,
+			durationMs: r.durationMs ?? 0,
+			...(r.artworkUrl && { artworkUrl: r.artworkUrl }),
+			url: r.source.url
 		}));
 	};
 }

@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from 'bun:test';
-import { collectionExpander, matchingService, type Resolver } from './matching';
+import { collectionExpander, matchingService, songSearch, type Resolver } from './matching';
 
 const SPOTIFY = 'https://open.spotify.com/track/0DiWol3AO6WpXZgp0goxAV';
 const ALBUM = 'https://open.spotify.com/album/2noRn2Aes5aoNVsU6iWThc';
@@ -13,6 +13,17 @@ let asked: Record<string, unknown> = {};
 const nidol = Bun.serve({
 	port: 0,
 	async fetch(req) {
+		const { pathname, searchParams } = new URL(req.url);
+		if (pathname === '/search') {
+			asked = Object.fromEntries(searchParams);
+			if (asked.q === 'down') return Response.json({ error: 'search_unavailable' }, { status: 503 });
+			return Response.json({
+				results: [
+					{ title: 'One More Time', artists: ['Daft Punk'], durationMs: 320357, artworkUrl: 'https://img/1', isrc: 'GBDUW0000053', source: { platform: 'deezer', id: '3135556', url: 'https://www.deezer.com/track/3135556' } },
+					{ title: 'One More Time (Live)', artists: ['Daft Punk'], durationMs: null, artworkUrl: null, isrc: null, source: { platform: 'ytmusic', id: 'x', url: 'https://music.youtube.com/watch?v=xxxxxxxxxxx' } }
+				]
+			});
+		}
 		asked = (await req.json()) as Record<string, unknown>;
 		if (new URL(req.url).pathname === '/expand') {
 			if (asked.input === PLAYLIST)
@@ -93,6 +104,19 @@ test('an album expands into its songs, with unknown durations as 0', async () =>
 test('a nidol without /expand reads as "collections not available"', async () => {
 	const old = Bun.serve({ port: 0, fetch: () => Response.json({ detail: 'Not Found' }, { status: 404 }) });
 	expect(await collectionExpander(old.url.href)(ALBUM)).toBe('collection');
+	old.stop(true);
+});
+
+test('search finds songs in the party\'s country, unknowns left out or 0', async () => {
+	const find = songSearch(nidol.url.href, { country: 'CL' });
+	expect(await find('one more time')).toEqual([
+		{ title: 'One More Time', artists: ['Daft Punk'], durationMs: 320357, artworkUrl: 'https://img/1', url: 'https://www.deezer.com/track/3135556' },
+		{ title: 'One More Time (Live)', artists: ['Daft Punk'], durationMs: 0, url: 'https://music.youtube.com/watch?v=xxxxxxxxxxx' }
+	]);
+	expect(asked).toEqual({ q: 'one more time', country: 'CL' });
+	expect(await find('down')).toBe('matching-unavailable');
+	const old = Bun.serve({ port: 0, fetch: () => Response.json({ detail: 'Not Found' }, { status: 404 }) });
+	expect(await songSearch(old.url.href)('x')).toBe('matching-unavailable');
 	old.stop(true);
 });
 

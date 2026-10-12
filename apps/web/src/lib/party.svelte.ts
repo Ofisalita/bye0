@@ -1,4 +1,4 @@
-import type { ClientMessage, ErrorCode, Guest, PartySettings, PartyState, ServerMessage } from '@bye0/shared';
+import type { ClientMessage, ErrorCode, Guest, PartySettings, PartyState, SearchResult, ServerMessage } from '@bye0/shared';
 
 const TOKEN_KEY = 'bye0.token';
 const PARTY_KEY = 'bye0.party';
@@ -29,6 +29,8 @@ export class PartyClient {
 	state = $state<PartyState | null>(null);
 	you = $state<string | null>(null);
 	error = $state<ErrorCode | null>(null);
+	/** The latest song search results, for this tab only. */
+	search = $state<{ q: string; results: SearchResult[] } | null>(null);
 	status = $state<'idle' | 'connecting' | 'open' | 'ended'>('idle');
 	/** Why this device is out of the party, when it wasn't simply ended. Unlike `error`, it stays. */
 	endReason = $state<ErrorCode | null>(null);
@@ -107,6 +109,9 @@ export class PartyClient {
 				break;
 			case 'state':
 				this.setState(msg.state);
+				break;
+			case 'search.results':
+				this.search = { q: msg.q, results: msg.results };
 				break;
 			case 'ended':
 				this.leave();

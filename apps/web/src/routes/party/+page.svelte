@@ -16,7 +16,7 @@
 	import { m } from '#lib/paraglide/messages.js';
 	import { getLocale } from '#lib/paraglide/runtime.js';
 	import { party } from '#lib/party.svelte.ts';
-	import { errorText, label } from '#lib/text.ts';
+	import { duration, errorText, label } from '#lib/text.ts';
 
 	// Choices for the host's limits; null turns a limit off.
 	const MAX_DURATION_CHOICES = [null, 5, 7, 10, 15, 20, 30].map((min) => min && min * 60_000);
@@ -112,12 +112,34 @@
 			.filter(Boolean)
 			.join(' · ');
 
+	/** A link gets added; anything else is a search. */
+	const isLink = $derived(/^(https?:\/\/|www\.|[\w-]+(\.[\w-]+)+\/)/i.test(input.trim()));
+	/** The search sent last; done once its results or an error arrive. */
+	let searchingFor = $state<string | null>(null);
+	const searching = $derived(searchingFor !== null && party.search?.q !== searchingFor && !party.error);
+	$effect(() => {
+		if (!searching) searchingFor = null;
+	});
+
 	function add(e: SubmitEvent) {
 		e.preventDefault();
-		if (!input.trim()) return;
-		party.send({ t: 'add', input });
+		const text = input.trim();
+		if (!text) return;
+		if (!isLink) {
+			party.search = null;
+			searchingFor = text;
+			party.send({ t: 'search', q: text });
+			return;
+		}
+		// "youtu.be/…" pasted without its scheme still needs one to be a link.
+		addSong(/^https?:\/\//i.test(text) ? text : `https://${text}`);
+	}
+
+	function addSong(link: string) {
+		party.send({ t: 'add', input: link });
 		addingSince = queued;
 		input = '';
+		party.search = null;
 	}
 
 	async function paste() {
@@ -214,17 +236,42 @@
 		</section>
 
 		<form class="row" onsubmit={add}>
-			<input class="grow" type="text" bind:value={input} placeholder={m.add_placeholder()} aria-label={m.add_placeholder()} inputmode="url" />
+			<input class="grow" type="text" bind:value={input} placeholder={m.add_placeholder()} aria-label={m.add_placeholder()} />
 			{#if !input && 'clipboard' in navigator}
 				<button type="button" onclick={paste}>{m.add_paste()}</button>
+			{:else if isLink}
+				<button class="primary" disabled={waitSeconds > 0}>{m.add_action()}</button>
 			{:else}
-				<button class="primary" disabled={!input.trim() || waitSeconds > 0}>{m.add_action()}</button>
+				<button class="primary" disabled={!input.trim() || searching}>{m.search_action()}</button>
 			{/if}
 		</form>
-		{#if adding}
+		{#if searching}
+			<p class="dim" role="status">{m.searching()}</p>
+		{:else if adding}
 			<p class="dim" role="status">{m.adding()}</p>
 		{:else if waitSeconds > 0}
 			<p class="dim" role="status">{m.add_cooldown_wait({ seconds: waitSeconds })}</p>
+		{/if}
+
+		{#if party.search}
+			{@const found = party.search}
+			<section class="card">
+				<div class="row">
+					<h2 class="grow">{m.search_title({ q: found.q })}</h2>
+					<button class="small" onclick={() => (party.search = null)}>{m.close()}</button>
+				</div>
+				{#each found.results as r (r.url)}
+					<button class="result" disabled={waitSeconds > 0} onclick={() => addSong(r.url)}>
+						{#if r.artworkUrl}<img src={r.artworkUrl} alt="" loading="lazy" />{:else}<span class="art"></span>{/if}
+						<span class="text">
+							<span class="ellipsis">{r.title}</span>
+							<span class="dim ellipsis">{[r.artists.join(', '), duration(r.durationMs)].filter(Boolean).join(' · ')}</span>
+						</span>
+					</button>
+				{:else}
+					<p class="dim">{m.no_results()}</p>
+				{/each}
+			</section>
 		{/if}
 
 		{#if confirming}
@@ -427,6 +474,26 @@
 	}
 	input[type='range'] {
 		width: 100%;
+	}
+	.result {
+		display: flex;
+		align-items: center;
+		gap: var(--gap);
+		padding: 8px;
+		text-align: left;
+	}
+	.result img,
+	.result .art {
+		flex: none;
+		width: 48px;
+		height: 48px;
+		object-fit: cover;
+		border-radius: 6px;
+		background: var(--surface);
+	}
+	.result .text {
+		display: grid;
+		min-width: 0;
 	}
 	.confirm,
 	.lobby {

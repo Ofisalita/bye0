@@ -1,4 +1,4 @@
-import type { GuestId, PartySettings, PartyState, Role } from './types';
+import type { GuestId, PartySettings, PartyState, Role, SearchResult } from './types';
 
 /** Messages a browser sends over the WebSocket. */
 export type ClientMessage =
@@ -9,6 +9,8 @@ export type ClientMessage =
 	| { t: 'resume'; partyId: string; token: string; player?: boolean }
 	| { t: 'start' }
 	| { t: 'add'; input: string }
+	/** Find songs by name; the results come back to this connection only. */
+	| { t: 'search'; q: string }
 	| { t: 'skip' }
 	| { t: 'remove'; itemId: string }
 	| { t: 'bump'; itemId: string }
@@ -50,6 +52,7 @@ export type ServerMessage =
 	| { t: 'welcome'; you: GuestId; state: PartyState }
 	| { t: 'state'; state: PartyState }
 	| { t: 'error'; code: ErrorCode }
+	| { t: 'search.results'; q: string; results: SearchResult[] }
 	| { t: 'ended' };
 
 /** Join-code alphabet: 20 symbols with the look-alikes (B/8, I/1, O/0, Q, S/5, Z/2) left out. */
