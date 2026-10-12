@@ -77,9 +77,10 @@ bye0 is in early development.
 | YouTube and YouTube Music links | ✅ |
 | Spotify song links | ✅ if you also run the matching service (see below) |
 | choosing the right version when the match is unsure | ✅ (with the matching service) |
-| Spotify albums and playlists | 🚧 bye0 is ready (the host turns it on); waiting on the matching service |
-| Apple Music, Deezer, Tidal links | 🚧 coming next |
-| searching for a song by name | 🚧 bye0 is ready; waiting on the matching service |
+| Spotify albums and playlists, YouTube Music albums, YouTube playlists | ✅ if the host turns it on (with the matching service) |
+| Deezer song links | ✅ (with the matching service) |
+| Apple Music and Tidal links, Deezer albums and playlists | 🚧 coming next |
+| searching for a song by name | ✅ (with the matching service) |
 | more party styles (song battles, minigames to settle skips, a rotating DJ crown…) | 🚧 |
 | "your song is next" notifications | 🚧 |
 | skins and a visualizer | later |
