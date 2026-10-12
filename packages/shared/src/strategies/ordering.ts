@@ -8,6 +8,37 @@ export const fifo: OrderingStrategy = {
 	order: (queue) => [...queue].sort(byAddedAt)
 };
 
+const upvotes = (item: QueueItem) => Object.keys(item.upvotes).length;
+
+/** Most upvotes first; ties in add order. */
+export const voteRanked: OrderingStrategy = {
+	id: 'vote-ranked',
+	usesUpvotes: true,
+	order: (queue) => [...queue].sort((a, b) => upvotes(b) - upvotes(a) || byAddedAt(a, b))
+};
+
+/** A vote is worth half as much every time this long passes. */
+export const HOT_HALF_LIFE_MS = 10 * 60_000;
+
+/**
+ * Like vote-ranked, but a vote counts for less the older it gets, so what the room wants now
+ * beats what it wanted an hour ago. Every vote fades at the same rate, which means time
+ * passing never reorders the queue by itself: only a vote does.
+ */
+export const hot: OrderingStrategy = {
+	id: 'hot',
+	usesUpvotes: true,
+	order(queue, ctx) {
+		const heat = new Map(
+			queue.map((item) => [
+				item,
+				Object.values(item.upvotes).reduce((sum, at) => sum + 0.5 ** ((ctx.now - at) / HOT_HALF_LIFE_MS), 0)
+			])
+		);
+		return [...queue].sort((a, b) => heat.get(b)! - heat.get(a)! || byAddedAt(a, b));
+	}
+};
+
 /** FNV-1a. Any even spread of ids would do. */
 function hash(text: string): number {
 	let h = 0x811c9dc5;

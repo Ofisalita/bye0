@@ -35,6 +35,8 @@ export interface QueueItem {
 	candidateIndex: number;
 	/** Set when someone with the right to do so moved it to the front. */
 	bumpedAt?: number;
+	/** Who upvoted it, and when. Kept under any ordering; only some use them. */
+	upvotes: Record<GuestId, number>;
 	/**
 	 * Set when the matching service wasn't sure of the match: until then (server time) whoever
 	 * added it can pick one of the top candidates. Cleared once someone picks.

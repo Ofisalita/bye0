@@ -32,6 +32,8 @@ export function duration(ms: number): string {
 const LABELS: Record<string, () => string> = {
 	fifo: m.ordering_fifo,
 	'round-robin': m.ordering_round_robin,
+	'vote-ranked': m.ordering_vote_ranked,
+	hot: m.ordering_hot,
 	shuffle: m.ordering_shuffle,
 	dictatorship: m.governance_dictatorship,
 	anarchy: m.governance_anarchy,

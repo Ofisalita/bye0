@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { DEFAULT_SETTINGS, type Guest, type PartyContext, type QueueItem } from '../types';
-import { GOVERNANCES, ORDERINGS } from './index';
+import { GOVERNANCES, HOT_HALF_LIFE_MS, ORDERINGS } from './index';
 
-const item = (id: string, addedBy: string, addedAt: number): QueueItem => ({
+const item = (id: string, addedBy: string, addedAt: number, upvotes: QueueItem['upvotes'] = {}): QueueItem => ({
 	id,
 	addedBy,
 	addedAt,
@@ -10,7 +10,8 @@ const item = (id: string, addedBy: string, addedAt: number): QueueItem => ({
 	artists: [],
 	durationMs: 0,
 	candidates: [],
-	candidateIndex: 0
+	candidateIndex: 0,
+	upvotes
 });
 const guest = (id: string, role: Guest['role'] = 'guest', connected = true): Guest => ({
 	id,
@@ -34,7 +35,7 @@ test('lookups ignore names every object inherits', () => {
 		expect(ORDERINGS[id]).toBeUndefined();
 		expect(GOVERNANCES[id]).toBeUndefined();
 	}
-	expect(Object.keys(ORDERINGS)).toEqual(['round-robin', 'fifo', 'shuffle']);
+	expect(Object.keys(ORDERINGS)).toEqual(['round-robin', 'fifo', 'vote-ranked', 'hot', 'shuffle']);
 });
 
 describe('ordering', () => {
@@ -51,6 +52,21 @@ describe('ordering', () => {
 	test('round-robin: whoever just played waits for the others', () => {
 		const c = { ...ctx([]), lastPlayedAt: { a: 10, b: 5 } };
 		expect(ids(ORDERINGS['round-robin']!.order(queue, c))).toEqual(['c1', 'b1', 'a1', 'b2', 'a2', 'a3']);
+	});
+
+	test('vote-ranked: most upvotes first, ties and the unvoted in add order', () => {
+		const voted = [item('a1', 'a', 1), item('b1', 'b', 2, { x: 9 }), item('c1', 'c', 3, { x: 5, y: 6 }), item('d1', 'd', 4, { y: 7 })];
+		expect(ids(ORDERINGS['vote-ranked']!.order(voted, ctx([])))).toEqual(['c1', 'b1', 'd1', 'a1']);
+	});
+
+	test('hot: old votes fade, and time alone never reorders', () => {
+		const h = HOT_HALF_LIFE_MS;
+		// At 3h: old has two votes that are three half-lives old (2 × 1/8), fresh has one new vote.
+		const voted = [item('old', 'a', 0, { x: 0, y: 0 }), item('fresh', 'b', 1, { x: 3 * h }), item('none', 'c', 2), item('none2', 'd', 3)];
+		const at = (now: number) => ids(ORDERINGS.hot!.order(voted, { ...ctx([]), now }));
+		expect(at(3 * h)).toEqual(['fresh', 'old', 'none', 'none2']);
+		expect(at(30 * h)).toEqual(at(3 * h));
+		expect(ids(ORDERINGS['vote-ranked']!.order(voted, ctx([])))).toEqual(['old', 'fresh', 'none', 'none2']);
 	});
 
 	test('shuffle: out of add order, yet the same every time and unmoved by new songs', () => {

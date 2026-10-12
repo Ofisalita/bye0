@@ -169,6 +169,31 @@ describe('Party', () => {
 		expect(party.nowPlaying).toMatchObject({ item: { candidateIndex: 1 }, positionMs: 0, positionAt: 6_000 });
 	});
 
+	test('upvotes: one per guest, taken back by voting again, never on your own song', () => {
+		const { party, host, ana, beto } = setup({ ordering: 'vote-ranked' });
+		party.add(ana, track('a1'), 1);
+		party.add(beto, track('b1'), 2);
+		const titles = () => party.state(9).queue.map((i) => i.title);
+		const [a1, b1] = party.state(3).queue;
+		expect(party.upvote(beto, b1!.id, 3)).toBe('not-allowed');
+		expect(party.upvote(ana, 'nope', 3)).toBe('bad-request');
+		expect(party.upvote(ana, b1!.id, 3)).toBeNull();
+		expect(party.upvote(host, b1!.id, 4)).toBeNull();
+		expect(b1!.upvotes).toEqual({ [ana]: 3, [host]: 4 });
+		expect(titles()).toEqual(['b1', 'a1']);
+		expect(party.upvote(ana, b1!.id, 5)).toBeNull();
+		expect(party.upvote(host, b1!.id, 5)).toBeNull();
+		expect(b1!.upvotes).toEqual({});
+		expect(titles()).toEqual(['a1', 'b1']);
+
+		// A kicked guest's votes leave with them.
+		party.upvote(beto, a1!.id, 6);
+		party.upvote(ana, b1!.id, 6);
+		party.upvote(host, b1!.id, 6);
+		party.kick(host, ana);
+		expect(party.state(9).queue).toMatchObject([{ title: 'b1', upvotes: { [host]: 6 } }]);
+	});
+
 	test('player errors fall through candidates, then skip', () => {
 		const { party, host, ana } = setup();
 		party.start(host, 0);

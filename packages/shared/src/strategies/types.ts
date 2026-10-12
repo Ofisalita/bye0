@@ -3,6 +3,8 @@ import type { GuestId, PartyContext, QueueItem } from '../types';
 /** Decides what plays next. */
 export interface OrderingStrategy {
 	id: string;
+	/** Upvotes move songs, so guests get the button. */
+	usesUpvotes?: boolean;
 	order(queue: QueueItem[], ctx: PartyContext): QueueItem[];
 }
 

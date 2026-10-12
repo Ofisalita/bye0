@@ -106,6 +106,8 @@ async function handle(ws: Socket, msg: ClientMessage) {
 			return done(party.remove(me, msg.itemId, now));
 		case 'bump':
 			return done(party.bump(me, msg.itemId, now));
+		case 'upvote':
+			return done(party.upvote(me, msg.itemId, now));
 		case 'pick':
 			return done(party.pick(me, msg.itemId, msg.candidateIndex, now));
 		case 'settings':

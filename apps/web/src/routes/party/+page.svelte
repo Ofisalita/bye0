@@ -20,6 +20,7 @@
 	const adding = $derived(addingSince !== null && addingSince === queued && !party.error);
 	const ctx = $derived<PartyContext | null>(s ? { ...s, lastPlayedAt: {}, now: s.serverNow } : null);
 	const governance = $derived(s ? GOVERNANCES[s.settings.governance] : undefined);
+	const ordering = $derived(s ? ORDERINGS[s.settings.ordering] : undefined);
 	const skip = $derived(ask({ type: 'skip' }));
 	const voted = $derived(skip?.kind === 'deny' && skip.reason === 'already-voted');
 	const tally = $derived(ctx && np ? { have: np.skipVotes.length, needed: skipVotesNeeded(ctx) } : null);
@@ -179,6 +180,17 @@
 						<p class="ellipsis">{item.title}</p>
 						<p class="dim ellipsis">{subtitle(item)}</p>
 					</div>
+					{#if ordering?.usesUpvotes}
+						<button
+							class="small upvote"
+							aria-label={m.upvote()}
+							aria-pressed={party.you !== null && Object.hasOwn(item.upvotes, party.you)}
+							disabled={item.addedBy === party.you}
+							onclick={() => party.send({ t: 'upvote', itemId: item.id })}
+						>
+							▲ {Object.keys(item.upvotes).length}
+						</button>
+					{/if}
 					{#if canPick(item)}
 						<button class="small" aria-expanded={picking === item.id} onclick={() => (picking = picking === item.id ? null : item.id)}>
 							{m.change_version()}
@@ -313,5 +325,12 @@
 	}
 	.confirm {
 		outline: 2px solid var(--accent);
+	}
+	.upvote {
+		white-space: nowrap;
+	}
+	.upvote[aria-pressed='true'] {
+		background: var(--accent);
+		color: var(--accent-text);
 	}
 </style>

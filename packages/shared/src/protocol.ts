@@ -11,6 +11,8 @@ export type ClientMessage =
 	| { t: 'skip' }
 	| { t: 'remove'; itemId: string }
 	| { t: 'bump'; itemId: string }
+	/** Give a queued song your upvote, or take it back. */
+	| { t: 'upvote'; itemId: string }
 	/** Choose which candidate plays: the adder while `confirmBy` is open, the host any time. */
 	| { t: 'pick'; itemId: string; candidateIndex: number }
 	| { t: 'settings'; patch: Partial<PartySettings> }
