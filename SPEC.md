@@ -16,7 +16,7 @@ is ordered and how disputes (skips, vetoes) are settled.
 | Audience | Friends now, possibly public later. v1 uses **only official/keyless-public APIs for playback**, so going public later doesn't need a rewrite of the player. |
 | Playback (v1) | **YouTube only**, via the official IFrame Player API, in a browser. Spotify / YT Music / Apple / Deezer / Tidal links are *accepted* and converted to a YouTube video. |
 | Spotify audio | **Not in v1.** Roadmap item: a desktop/Pi "power host" using go-librespot (unofficial, against Spotify ToS, Premium only). |
-| Spotify API key | **None.** Spotify links are resolved without it (see `MATCHING_SERVICE.md`). |
+| Spotify API key | **None.** Spotify links are resolved without it (see [nidol](https://github.com/Ofisalita/nidol), the matching service). |
 | Host device | **Any browser; phones first-class.** Web app only — no native apps in v1. |
 | Guests | Web page via QR / 4-letter code. Nickname only, no accounts. |
 | Persistence | **Ephemeral.** A party's data is deleted when it ends (with a TTL safety net). |
@@ -221,7 +221,7 @@ shut down in 2022 (only static dumps remain).
 | # | Risk | Spike |
 |---|---|---|
 | 1 | iOS Safari may not auto-advance to the next YouTube video without a tap | Build a minimal page: IFrame player, on `ENDED` call `loadVideoById(next)`, test on iPhone with the screen on. |
-| 2 | Match accuracy below 95% | Build the test set first (see `MATCHING_SERVICE.md`). |
+| 2 | Match accuracy below 95% | Build the test set first (see [nidol](https://github.com/Ofisalita/nidol)). |
 | 3 | ytmusicapi (unofficial) breaks | The matching service keeps an official fallback: YouTube Data API search (10k units/day default; most sources say ~100 units per search, about 100 searches/day **(verify in the Cloud console)**). |
 | 4 | Embedding-disabled videos (101/150) | Matching returns several candidates; the player falls through them automatically. |
 | 5 | Ads interrupt the party | Accept for v1. Test whether a host signed in to YouTube Premium in the same browser gets ad-free embeds **(unverified)**. |
