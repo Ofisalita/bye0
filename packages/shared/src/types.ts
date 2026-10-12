@@ -37,6 +37,11 @@ export interface QueueItem {
 	candidateIndex: number;
 	/** Set when someone with the right to do so moved it to the front. */
 	bumpedAt?: number;
+	/**
+	 * Set on an album/playlist song that hasn't been looked up yet: the link to resolve once it
+	 * nears the front. Until then `candidates` is empty and it can't play.
+	 */
+	source?: string;
 	/** Who upvoted it, and when. Kept under any ordering; only some use them. */
 	upvotes: Record<GuestId, number>;
 	/**
@@ -75,6 +80,8 @@ export interface PartySettings {
 	autoLockMs: number | null;
 	/** New guests must come from the host's network (same public IPv4, or IPv6 /64). */
 	sameNetwork: boolean;
+	/** Album and playlist links add all their songs (up to the per-guest limit). */
+	allowCollections: boolean;
 }
 
 /** What strategies get to look at. */
@@ -115,7 +122,8 @@ export const DEFAULT_SETTINGS: PartySettings = {
 	approveJoins: false,
 	locked: false,
 	autoLockMs: null,
-	sameNetwork: false
+	sameNetwork: false,
+	allowCollections: false
 };
 
 /** Whether new guests are kept out: locked by hand, or the auto-lock time has come. */

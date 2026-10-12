@@ -31,6 +31,15 @@ export interface ResolvedTrack {
 	isLive?: boolean;
 }
 
+/** One song of an album or playlist, before it's been looked up. */
+export interface CollectionTrack {
+	title: string;
+	artists: string[];
+	durationMs: number;
+	/** A link the matching service resolves to this song. */
+	source: string;
+}
+
 type Result = ErrorCode | null;
 
 /**
@@ -274,6 +283,7 @@ export class Party {
 			typeof next.approveJoins !== 'boolean' ||
 			typeof next.locked !== 'boolean' ||
 			typeof next.sameNetwork !== 'boolean' ||
+			typeof next.allowCollections !== 'boolean' ||
 			!posOrNull(next.autoLockMs) ||
 			!posOrNull(next.maxDurationMs) ||
 			!posOrNull(next.maxQueuedPerGuest) ||
@@ -293,7 +303,8 @@ export class Party {
 			approveJoins: next.approveJoins,
 			locked: next.locked,
 			autoLockMs: next.autoLockMs,
-			sameNetwork: next.sameNetwork
+			sameNetwork: next.sameNetwork,
+			allowCollections: next.allowCollections
 		};
 		// Nobody is left waiting for an approval that is no longer asked for.
 		if (!this.settings.approveJoins) for (const g of this.guests.values()) delete g.pending;
@@ -343,6 +354,69 @@ export class Party {
 		this.lastActivity = now;
 		if (this.started && !this.nowPlaying) this.advance(now);
 		return null;
+	}
+
+	/**
+	 * Queues an album or playlist as stubs, which are looked up only as they near the front
+	 * (nidol D9). Songs over the length limit are left out; the per-guest limit caps how many go in.
+	 */
+	addCollection(by: GuestId, tracks: CollectionTrack[], now: number): Result {
+		const guest = this.guests.get(by);
+		if (!guest) return 'not-allowed';
+		const limited = this.canAdd(by, now);
+		if (limited) return limited;
+		const max = this.settings.maxDurationMs;
+		const perGuest = this.settings.maxQueuedPerGuest;
+		const fitting = tracks.filter((t) => max === null || t.durationMs <= max);
+		const room = perGuest === null ? fitting.length : perGuest - this.queue.filter((i) => i.addedBy === by).length;
+		const taken = fitting.slice(0, room);
+		if (!taken.length) return tracks.length ? 'too-long' : 'unresolvable';
+		taken.forEach((t, i) =>
+			this.queue.push({
+				id: crypto.randomUUID(),
+				addedBy: by,
+				// A millisecond apart, so orderings that sort by add time keep the album's order.
+				addedAt: now + i,
+				title: t.title,
+				artists: t.artists,
+				durationMs: t.durationMs,
+				candidates: [],
+				candidateIndex: 0,
+				upvotes: {},
+				source: t.source
+			})
+		);
+		guest.lastAddedAt = now;
+		this.lastActivity = now;
+		return null;
+	}
+
+	/** Stubs among the next `n` songs to play: the ones to look up now. */
+	stubsAhead(n: number, now: number): QueueItem[] {
+		return this.orderedQueue(now)
+			.slice(0, n)
+			.filter((i) => i.source !== undefined);
+	}
+
+	/**
+	 * A stub's lookup finished: it becomes a normal song (auto-picked, no confirmation prompt),
+	 * or leaves the queue if it can't be played. False if the stub is gone already.
+	 */
+	fillStub(itemId: string, track: ResolvedTrack | ErrorCode, now: number): boolean {
+		const item = this.queue.find((i) => i.id === itemId && i.source !== undefined);
+		if (!item) return false;
+		const max = this.settings.maxDurationMs;
+		const playable =
+			typeof track !== 'string' && track.candidates.length > 0 && !(max !== null && (track.isLive || track.durationMs > max));
+		if (playable) {
+			item.title = track.title;
+			item.artists = track.artists;
+			item.durationMs = track.durationMs;
+			item.candidates = track.candidates;
+			delete item.source;
+		} else this.queue = this.queue.filter((i) => i !== item);
+		if (this.started && !this.nowPlaying) this.advance(now);
+		return true;
 	}
 
 	skip(by: GuestId, now: number): Result {
@@ -463,7 +537,8 @@ export class Party {
 	}
 
 	private advance(now: number): void {
-		const next = this.orderedQueue(now)[0];
+		// Stubs wait until they're looked up; the next playable song goes first.
+		const next = this.orderedQueue(now).find((i) => i.source === undefined);
 		this.queue = this.queue.filter((i) => i !== next);
 		if (next) this.lastPlayedAt[next.addedBy] = now;
 		this.nowPlaying = next

@@ -1,6 +1,6 @@
 import type { ClientMessage, ErrorCode, ServerMessage } from '@bye0/shared';
 import type { ServerWebSocket } from 'bun';
-import { matchingService, youtubeOnly } from './matching';
+import { collectionExpander, matchingService, youtubeOnly } from './matching';
 import { Party } from './party';
 import { PARTY_TTL_MS, Registry } from './registry';
 import { memoryOnly, redisStore } from './store';
@@ -12,6 +12,8 @@ const MATCHING_COUNTRY = process.env.MATCHING_COUNTRY?.toUpperCase() || undefine
 if (MATCHING_COUNTRY && !/^[A-Z]{2}$/.test(MATCHING_COUNTRY))
 	throw new Error(`MATCHING_COUNTRY must be a two-letter country code like CL, got "${MATCHING_COUNTRY}"`);
 const MAX_INPUT_LENGTH = 500;
+/** Album/playlist songs are looked up once they're this close to playing (nidol D9). */
+const LOOKAHEAD = 3;
 /** Optional: with it, parties survive a restart or redeploy of this server. */
 const REDIS_URL = process.env.REDIS_URL;
 
@@ -33,7 +35,10 @@ try {
 	console.error('could not load saved parties, starting without them:', err);
 }
 const resolveTrack = MATCHING_URL ? matchingService(MATCHING_URL, { country: MATCHING_COUNTRY }) : youtubeOnly;
+const expandCollection = MATCHING_URL ? collectionExpander(MATCHING_URL) : null;
 const sockets = new Map<string, Socket>();
+/** Ids of album/playlist songs being looked up right now. */
+const lookingUp = new Set<string>();
 
 const topic = (party: Party) => `party:${party.id}`;
 const send = (ws: Socket, msg: ServerMessage) => ws.send(JSON.stringify(msg));
@@ -46,8 +51,27 @@ function broadcast(party: Party) {
 	store.save(party);
 	try {
 		server.publish(topic(party), JSON.stringify({ t: 'state', state: party.state(Date.now()) } satisfies ServerMessage));
+		lookAhead(party);
 	} catch (err) {
 		console.error(`broadcast failed for party ${party.id}:`, err);
+	}
+}
+
+/** Starts looking up album/playlist songs that are about to play; each result is broadcast. */
+function lookAhead(party: Party) {
+	for (const item of party.stubsAhead(LOOKAHEAD, Date.now())) {
+		if (lookingUp.has(item.id)) continue;
+		lookingUp.add(item.id);
+		resolveTrack(item.source!, { preferAudio: party.settings.preferAudio })
+			.catch((err): ErrorCode => {
+				console.error('collection song lookup failed:', err);
+				return 'unresolvable';
+			})
+			.then((track) => {
+				lookingUp.delete(item.id);
+				if (typeof track === 'string') console.warn(`dropping "${item.title}" from an album/playlist: ${track}`);
+				if (registry.get(party.id) === party && party.fillStub(item.id, track, Date.now())) broadcast(party);
+			});
 	}
 }
 
@@ -122,6 +146,15 @@ async function handle(ws: Socket, msg: ClientMessage) {
 				console.error('resolve failed:', err);
 				return 'unresolvable';
 			});
+			if (track === 'collection') {
+				if (!party.settings.allowCollections || !expandCollection) return fail(ws, 'collection');
+				const tracks = await expandCollection(msg.input).catch((err): ErrorCode => {
+					console.error('expand failed:', err);
+					return 'matching-unavailable';
+				});
+				if (typeof tracks === 'string') return fail(ws, tracks);
+				return done(party.addCollection(me, tracks, Date.now()));
+			}
 			if (typeof track === 'string') return fail(ws, track);
 			return done(party.add(me, track, Date.now()));
 		}
