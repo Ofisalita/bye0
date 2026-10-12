@@ -5,7 +5,8 @@ export type ClientMessage =
 	// `token` is the device's secret identity (localStorage); it never leaves this channel.
 	| { t: 'create'; nickname: string; token: string; settings?: Partial<PartySettings> }
 	| { t: 'join'; code: string; nickname: string; token: string }
-	| { t: 'resume'; partyId: string; token: string }
+	/** `player`: this tab was the Player before its connection dropped; it takes the role back if it's free. */
+	| { t: 'resume'; partyId: string; token: string; player?: boolean }
 	| { t: 'start' }
 	| { t: 'add'; input: string }
 	| { t: 'skip' }

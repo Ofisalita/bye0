@@ -1,8 +1,9 @@
 import type { ClientMessage, ErrorCode, ServerMessage } from '@bye0/shared';
 import type { ServerWebSocket } from 'bun';
 import { matchingService, youtubeOnly } from './matching';
-import type { Party } from './party';
-import { Registry } from './registry';
+import { Party } from './party';
+import { PARTY_TTL_MS, Registry } from './registry';
+import { memoryOnly, redisStore } from './store';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const MATCHING_URL = process.env.MATCHING_URL;
@@ -11,6 +12,8 @@ const MATCHING_COUNTRY = process.env.MATCHING_COUNTRY?.toUpperCase() || undefine
 if (MATCHING_COUNTRY && !/^[A-Z]{2}$/.test(MATCHING_COUNTRY))
 	throw new Error(`MATCHING_COUNTRY must be a two-letter country code like CL, got "${MATCHING_COUNTRY}"`);
 const MAX_INPUT_LENGTH = 500;
+/** Optional: with it, parties survive a restart or redeploy of this server. */
+const REDIS_URL = process.env.REDIS_URL;
 
 interface Conn {
 	id: string;
@@ -21,14 +24,26 @@ interface Conn {
 type Socket = ServerWebSocket<Conn>;
 
 const registry = new Registry();
+const store = REDIS_URL ? redisStore(REDIS_URL, PARTY_TTL_MS) : memoryOnly;
+try {
+	const snapshots = await store.loadAll();
+	for (const snapshot of snapshots) registry.restore(Party.restore(snapshot));
+	if (snapshots.length) console.log(`restored ${snapshots.length} part${snapshots.length === 1 ? 'y' : 'ies'}`);
+} catch (err) {
+	console.error('could not load saved parties, starting without them:', err);
+}
 const resolveTrack = MATCHING_URL ? matchingService(MATCHING_URL, { country: MATCHING_COUNTRY }) : youtubeOnly;
 const sockets = new Map<string, Socket>();
 
 const topic = (party: Party) => `party:${party.id}`;
 const send = (ws: Socket, msg: ServerMessage) => ws.send(JSON.stringify(msg));
 const fail = (ws: Socket, code: ErrorCode) => send(ws, { t: 'error', code });
-/** Never throws: it also runs from socket-close and timer callbacks, where an error would exit the process. */
+/**
+ * Sends everyone the new state, and saves it. Every change goes through here.
+ * Never throws: it also runs from socket-close and timer callbacks, where an error would exit the process.
+ */
 function broadcast(party: Party) {
+	store.save(party);
 	try {
 		server.publish(topic(party), JSON.stringify({ t: 'state', state: party.state(Date.now()) } satisfies ServerMessage));
 	} catch (err) {
@@ -39,12 +54,16 @@ function broadcast(party: Party) {
 function endParty(party: Party) {
 	server.publish(topic(party), JSON.stringify({ t: 'ended' } satisfies ServerMessage));
 	registry.end(party);
+	store.remove(party.id);
 }
 
-function enter(ws: Socket, party: Party, guestId: string) {
+/** `asPlayer`: a Player view coming back after its connection dropped takes the role back, if it's free. */
+function enter(ws: Socket, party: Party, guestId: string, asPlayer = false) {
 	ws.data.partyId = party.id;
 	ws.data.guestId = guestId;
 	party.connect(ws.data.id, guestId, Date.now(), ws.data.ip);
+	// Before the welcome, so the player never sees itself lose the role.
+	if (asPlayer) party.claimPlayer(ws.data.id, false);
 	ws.subscribe(topic(party));
 	send(ws, { t: 'welcome', you: guestId, state: party.state(Date.now()) });
 	broadcast(party);
@@ -73,7 +92,7 @@ function handleEntry(ws: Socket, msg: ClientMessage) {
 			const party = registry.get(msg.partyId);
 			const guest = party?.guestByToken(msg.token);
 			if (!party || !guest) return fail(ws, 'party-gone');
-			return enter(ws, party, guest.id);
+			return enter(ws, party, guest.id, msg.player === true);
 		}
 		default:
 			return fail(ws, 'bad-request');
@@ -141,6 +160,8 @@ async function handle(ws: Socket, msg: ClientMessage) {
 			return done(party.claimPlayer(ws.data.id));
 		case 'player.heartbeat':
 			if (party.heartbeat(ws.data.id, msg.itemId, msg.positionMs, msg.paused, now)) broadcast(party);
+			// Saved even when nothing visible changed, so a restart resumes close to the right spot.
+			else store.save(party);
 			return;
 		case 'player.ended':
 			if (party.ended(ws.data.id, msg.itemId, now)) broadcast(party);
@@ -196,9 +217,12 @@ const server = Bun.serve<Conn>({
 setInterval(() => {
 	const { rotated, expired } = registry.tick(Date.now());
 	rotated.forEach(broadcast);
-	for (const party of expired) server.publish(topic(party), JSON.stringify({ t: 'ended' } satisfies ServerMessage));
+	for (const party of expired) {
+		server.publish(topic(party), JSON.stringify({ t: 'ended' } satisfies ServerMessage));
+		store.remove(party.id);
+	}
 }, 5_000);
 
 console.log(
-	`bye0 room server on :${server.port} (${MATCHING_URL ? `matching: ${MATCHING_URL}, country: ${MATCHING_COUNTRY ?? 'none'}` : 'no MATCHING_URL: YouTube links only'})`
+	`bye0 room server on :${server.port} (${MATCHING_URL ? `matching: ${MATCHING_URL}, country: ${MATCHING_COUNTRY ?? 'none'}` : 'no MATCHING_URL: YouTube links only'}; ${REDIS_URL ? 'parties saved to Redis' : 'no REDIS_URL: parties end on restart'})`
 );

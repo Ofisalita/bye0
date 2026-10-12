@@ -288,6 +288,42 @@ describe('Party', () => {
 		expect(party.join('eli', 'eli', 3, 'guest', '198.51.100.1')).toMatchObject({ nickname: 'eli' });
 	});
 
+	test('a snapshot survives JSON and restores the same party, minus connections', () => {
+		const { party, host, ana, beto } = setup({ ordering: 'fifo' });
+		party.patchSettings({ sameNetwork: true }, host);
+		party.connect('conn-host-2', host, 0, '203.0.113.7');
+		party.start(host, 1);
+		party.add(ana, track('a1', 2), 2);
+		party.add(beto, track('b1'), 3);
+		party.add(ana, track('a2'), 4);
+		party.upvote(beto, party.state(5).queue.find((i) => i.title === 'a2')!.id, 5);
+		party.claimPlayer('conn-host');
+		party.heartbeat('conn-host', party.nowPlaying!.item.id, 42_000, false, 6);
+		party.skip(ana, 7);
+		party.kick(host, beto);
+
+		const restored = Party.restore(JSON.parse(JSON.stringify(party.snapshot())));
+		const before = party.state(8);
+		const after = restored.state(8);
+		expect(after).toEqual({
+			...before,
+			guests: before.guests.map((g) => ({ ...g, connected: false })),
+			playerId: null
+		});
+		expect(restored.guestByToken('ana')?.id).toBe(ana);
+		expect(restored.join('beto', 'beto', 9)).toBe('banned');
+		expect(restored.join('cata', 'cata', 9, 'guest', '198.51.100.1')).toBe('other-network');
+		expect(restored.join('cata', 'cata', 9, 'guest', '203.0.113.7')).toMatchObject({ nickname: 'cata' });
+	});
+
+	test('a player coming back only takes the role if nobody else has it', () => {
+		const { party, host } = setup();
+		party.connect('conn-host-tv', host, 0);
+		expect(party.claimPlayer('conn-host', false)).toBeNull();
+		expect(party.claimPlayer('conn-host-tv', false)).toBe('not-allowed');
+		expect(party.claimPlayer('conn-host-tv')).toBeNull(); // an explicit tap still takes over
+	});
+
 	test('kick bans the device and drops its songs', () => {
 		const { party, host, ana } = setup();
 		party.add(ana, track('a1'), 1);
@@ -338,6 +374,19 @@ describe('Registry', () => {
 
 		expect(reg.tick(PARTY_TTL_MS + 1).expired).toEqual([party]);
 		expect(reg.get(party.id)).toBeUndefined();
+	});
+
+	test('restore puts a party back with its current and grace-period codes', () => {
+		const reg = new Registry();
+		const party = reg.create(0);
+		const first = party.code;
+		reg.tick(CODE_ROTATE_MS);
+		const again = new Registry();
+		again.restore(Party.restore(JSON.parse(JSON.stringify(party.snapshot()))));
+		expect(again.byCode(party.code, CODE_ROTATE_MS + 1)?.id).toBe(party.id);
+		expect(again.byCode(first, CODE_ROTATE_MS + 1)?.id).toBe(party.id);
+		again.tick(CODE_ROTATE_MS + CODE_GRACE_MS + 1);
+		expect(again.byCode(first, CODE_ROTATE_MS + CODE_GRACE_MS + 2)).toBeUndefined();
 	});
 
 	test('join: a whole party may join from one IP, wrong codes from it are limited', () => {

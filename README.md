@@ -64,7 +64,8 @@ you can also send songs straight from your music app, once you've joined:
   bye0 keeps the screen awake for you where the browser allows it.
 - YouTube ads will show up and bye0 can't skip them.
 - the join code changes every few minutes, so use the one currently on screen.
-- nothing is saved. when the party ends, everything about it is gone.
+- nothing is kept after the party. when it ends (or nobody has touched it for 6 hours), everything about it is gone.
+  while it's on, a restart of the bye0 server doesn't end it: everyone reconnects by themselves.
 - available in English and Spanish (it follows your browser language; you can switch on the start page).
 
 ## What works today
@@ -124,6 +125,17 @@ MATCHING_URL=http://localhost:8000 bun run dev:server
 add `MATCHING_COUNTRY=CL` (any two-letter country code) to get search results for your country.
 
 if nidol is down or can't handle a link, YouTube links keep working and guests are asked to paste one.
+
+### Surviving restarts
+
+by default parties live in the party server's memory, so restarting it ends them. give it a
+[Redis](https://redis.io) (or [Valkey](https://valkey.io)) and they survive:
+
+```sh
+REDIS_URL=redis://localhost:6379 bun run dev:server
+```
+
+the Docker Compose setup already includes one.
 
 ## License
 
