@@ -56,6 +56,21 @@ describe('Party', () => {
 		expect(party.nowPlaying?.skipVotes).toEqual([]);
 	});
 
+	test('democracy: a guest going offline lowers the bar, unless offline guests count', () => {
+		for (const skipCountsOffline of [false, true]) {
+			const { party, host, ana } = setup({ skipThreshold: 0.6, skipCountsOffline }); // 3 guests → 2 votes
+			party.start(host, 0);
+			party.add(ana, track('a1'), 1);
+			party.add(ana, track('a2'), 2);
+			party.disconnect('conn-beto'); // 2 connected → 2 votes; offline counted → still 2
+			party.disconnect('conn-host'); // 1 connected → 1 vote; offline counted → still 2
+			expect(party.skip(ana, 3)).toBeNull();
+			expect(party.nowPlaying?.item.title).toBe(skipCountsOffline ? 'a1' : 'a2');
+		}
+		const { party, host } = setup();
+		expect(party.patchSettings({ skipCountsOffline: 'yes' as unknown as boolean }, host)).toBe('bad-request');
+	});
+
 	test('guards: duration and per-guest limit', () => {
 		const { party, ana } = setup({ maxDurationMs: 60_000, maxQueuedPerGuest: 1 });
 		expect(party.add(ana, track('long'), 1)).toBe('too-long');

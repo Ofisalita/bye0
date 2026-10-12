@@ -306,6 +306,14 @@
 							onchange={(e) => party.send({ t: 'settings', patch: { skipThreshold: Number(e.currentTarget.value) } })}
 						/>
 					</label>
+					<label class="row">
+						<input
+							type="checkbox"
+							checked={s.settings.skipCountsOffline}
+							onchange={(e) => party.send({ t: 'settings', patch: { skipCountsOffline: e.currentTarget.checked } })}
+						/>
+						{m.skip_counts_offline()}
+					</label>
 				{/if}
 				<label class="row">
 					<input

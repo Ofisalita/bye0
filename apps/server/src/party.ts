@@ -203,6 +203,7 @@ export class Party {
 			!GOVERNANCES[next.governance] ||
 			typeof next.skipThreshold !== 'number' ||
 			!(next.skipThreshold > 0 && next.skipThreshold <= 1) ||
+			typeof next.skipCountsOffline !== 'boolean' ||
 			typeof next.showAttribution !== 'boolean' ||
 			typeof next.preferAudio !== 'boolean' ||
 			typeof next.approveJoins !== 'boolean' ||
@@ -219,6 +220,7 @@ export class Party {
 			ordering: next.ordering,
 			governance: next.governance,
 			skipThreshold: next.skipThreshold,
+			skipCountsOffline: next.skipCountsOffline,
 			showAttribution: next.showAttribution,
 			maxDurationMs: next.maxDurationMs,
 			maxQueuedPerGuest: next.maxQueuedPerGuest,

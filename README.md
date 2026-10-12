@@ -32,6 +32,10 @@ you can change the rules mid-party. "who decides" has four settings:
   without asking.
 - **Anarchy**: anyone skips, removes or moves any song to the front, no vote needed.
 
+in the two democracies you choose how many of the guests a skip needs. guests whose phone is offline don't
+count, so the bar drops as phones go to sleep. tick **Guests who are offline still count for skip votes** if
+you'd rather it didn't.
+
 "queue order" can also go by votes: **Most voted first** plays the songs with the most ▲, and **Hot** does
 the same but lets old votes fade (a vote is worth half after ten minutes), so recent favourites win.
 
