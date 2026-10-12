@@ -80,7 +80,7 @@ export interface PartyState {
 
 export const DEFAULT_SETTINGS: PartySettings = {
 	ordering: 'round-robin',
-	governance: 'democracy',
+	governance: 'full-democracy',
 	skipThreshold: 0.5,
 	showAttribution: true,
 	maxDurationMs: 10 * 60_000,
@@ -95,5 +95,5 @@ export interface Preset {
 // Only presets whose strategies exist are listed; SPEC §4 has the full set.
 export const PRESETS: Preset[] = [
 	{ id: 'chill-dinner', settings: { ordering: 'fifo', governance: 'dictatorship' } },
-	{ id: 'house-party', settings: { ordering: 'round-robin', governance: 'democracy' } }
+	{ id: 'house-party', settings: { ordering: 'round-robin', governance: 'full-democracy' } }
 ];

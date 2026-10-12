@@ -19,12 +19,14 @@ export type DenyReason = 'not-allowed' | 'already-voted' | 'nothing-playing';
 export type Resolution =
 	| { kind: 'apply' }
 	| { kind: 'deny'; reason: DenyReason }
-	/** The intent counts as a vote that hasn't reached the threshold yet. */
+	/** The intent counts as a vote (included in `have`); it carries once `have >= needed`. */
 	| { kind: 'vote'; have: number; needed: number };
 
 /** Decides who can skip/remove/bump and how disputes resolve. */
 export interface GovernanceMode {
 	id: string;
+	/** Skips are put to a vote, so `settings.skipThreshold` matters. */
+	votesToSkip?: boolean;
 	handle(intent: Intent, ctx: PartyContext): Resolution;
 }
 

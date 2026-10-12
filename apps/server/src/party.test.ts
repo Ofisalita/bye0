@@ -62,8 +62,35 @@ describe('Party', () => {
 		expect(party.add(ana, track('ok2', 1, 30_000), 1)).toBe('queue-limit');
 	});
 
-	test('bump puts a song first; only the host may under democracy', () => {
-		const { party, host, ana, beto } = setup();
+	test('full democracy: the host cannot skip, remove or bump alone', () => {
+		const { party, host, ana, beto } = setup({ skipThreshold: 1 }); // 3 connected → 3 votes
+		party.start(host, 0);
+		party.add(ana, track('a1'), 1);
+		party.add(ana, track('a2'), 2);
+		const a2 = party.state(3).queue[0]!;
+		expect(party.remove(host, a2.id, 3)).toBe('not-allowed');
+		expect(party.bump(host, a2.id, 3)).toBe('not-allowed');
+		expect(party.skip(host, 3)).toBeNull();
+		expect(party.skip(host, 3)).toBe('already-voted');
+		expect(party.skip(ana, 3)).toBeNull();
+		expect(party.nowPlaying).toMatchObject({ item: { title: 'a1' }, skipVotes: [host, ana] });
+		expect(party.skip(beto, 4)).toBeNull();
+		expect(party.nowPlaying?.item.title).toBe('a2');
+	});
+
+	test('presidential democracy: the host skips alone, guests still vote', () => {
+		const { party, host, ana } = setup({ governance: 'presidential-democracy', skipThreshold: 1 });
+		party.start(host, 0);
+		party.add(ana, track('a1'), 1);
+		party.add(ana, track('a2'), 2);
+		expect(party.skip(ana, 3)).toBeNull();
+		expect(party.nowPlaying?.item.title).toBe('a1');
+		expect(party.skip(host, 4)).toBeNull();
+		expect(party.nowPlaying?.item.title).toBe('a2');
+	});
+
+	test('bump puts a song first; under presidential democracy only the host may', () => {
+		const { party, host, ana, beto } = setup({ governance: 'presidential-democracy' });
 		party.add(ana, track('a1'), 1);
 		party.add(beto, track('b1'), 2);
 		const b1 = party.state(3).queue[1]!;

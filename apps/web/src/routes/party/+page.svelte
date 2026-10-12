@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { GOVERNANCES, ORDERINGS, skipVotesNeeded, type QueueItem } from '@bye0/shared';
+	import { GOVERNANCES, ORDERINGS, skipVotesNeeded, type PartyContext, type QueueItem, type Resolution } from '@bye0/shared';
 	import { m } from '#lib/paraglide/messages.js';
 	import { party } from '#lib/party.svelte.ts';
 	import { errorText, label } from '#lib/text.ts';
@@ -15,15 +15,19 @@
 	const canManage = $derived(party.me?.role !== 'guest');
 	const queued = $derived((s?.queue.length ?? 0) + (np ? 1 : 0));
 	const adding = $derived(addingSince !== null && addingSince === queued && !party.error);
-	const votes = $derived(
-		s && np
-			? {
-					have: np.skipVotes.length,
-					needed: skipVotesNeeded({ ...s, lastPlayedAt: {}, now: s.serverNow }),
-					mine: np.skipVotes.includes(party.you ?? '')
-				}
-			: null
-	);
+	const ctx = $derived<PartyContext | null>(s ? { ...s, lastPlayedAt: {}, now: s.serverNow } : null);
+	const governance = $derived(s ? GOVERNANCES[s.settings.governance] : undefined);
+	const skip = $derived(ask({ type: 'skip' }));
+	const voted = $derived(skip?.kind === 'deny' && skip.reason === 'already-voted');
+	const tally = $derived(ctx && np ? { have: np.skipVotes.length, needed: skipVotesNeeded(ctx) } : null);
+
+	type Ask = { type: 'skip' } | { type: 'remove' | 'bump'; item: QueueItem };
+	/** What the active rules would answer if this guest tried it. The server has the last word. */
+	function ask(intent: Ask): Resolution | null {
+		if (!ctx || !governance || !party.you) return null;
+		return governance.handle({ ...intent, by: party.you }, ctx);
+	}
+	const may = (intent: Ask) => ask(intent)?.kind === 'apply';
 
 	if (!party.state && party.status === 'idle' && !party.resume()) goto(resolve('/'));
 
@@ -36,7 +40,6 @@
 		[item.artists.join(', '), s?.settings.showAttribution ? m.added_by({ name: nameOf(item.addedBy) }) : '']
 			.filter(Boolean)
 			.join(' · ');
-	const canRemove = (item: QueueItem) => party.isHost || item.addedBy === party.you;
 
 	function add(e: SubmitEvent) {
 		e.preventDefault();
@@ -85,12 +88,12 @@
 				{:else if np.paused}
 					<p class="dim">{m.paused()}</p>
 				{/if}
-				{#if party.isHost || s.settings.governance === 'dictatorship'}
-					<button disabled={!party.isHost} onclick={() => party.send({ t: 'skip' })}>{m.skip()}</button>
-				{:else if votes}
-					<button disabled={votes.mine} onclick={() => party.send({ t: 'skip' })}>
-						{(votes.mine ? m.skip_voted : m.skip_vote)(votes)}
+				{#if tally && (skip?.kind === 'vote' || voted)}
+					<button disabled={voted} onclick={() => party.send({ t: 'skip' })}>
+						{(voted ? m.skip_voted : m.skip_vote)(tally)}
 					</button>
+				{:else}
+					<button disabled={skip?.kind !== 'apply'} onclick={() => party.send({ t: 'skip' })}>{m.skip()}</button>
 				{/if}
 			{:else}
 				<p class="dim">{s.started ? m.nothing_playing() : m.not_started()}</p>
@@ -120,10 +123,10 @@
 						<p class="ellipsis">{item.title}</p>
 						<p class="dim ellipsis">{subtitle(item)}</p>
 					</div>
-					{#if party.isHost}
+					{#if may({ type: 'bump', item })}
 						<button class="small" onclick={() => party.send({ t: 'bump', itemId: item.id })}>{m.bump()}</button>
 					{/if}
-					{#if canRemove(item)}
+					{#if may({ type: 'remove', item })}
 						<button class="small danger" onclick={() => party.send({ t: 'remove', itemId: item.id })}>{m.remove()}</button>
 					{/if}
 				</div>
@@ -151,7 +154,7 @@
 						{/each}
 					</select>
 				</label>
-				{#if s.settings.governance === 'democracy'}
+				{#if governance?.votesToSkip}
 					<label>
 						<span class="dim">{m.skip_threshold({ percent: Math.round(s.settings.skipThreshold * 100) })}</span>
 						<input

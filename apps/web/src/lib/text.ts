@@ -21,7 +21,8 @@ const LABELS: Record<string, () => string> = {
 	fifo: m.ordering_fifo,
 	'round-robin': m.ordering_round_robin,
 	dictatorship: m.governance_dictatorship,
-	democracy: m.governance_democracy,
+	'full-democracy': m.governance_full_democracy,
+	'presidential-democracy': m.governance_presidential_democracy,
 	'chill-dinner': m.preset_chill_dinner,
 	'house-party': m.preset_house_party
 };

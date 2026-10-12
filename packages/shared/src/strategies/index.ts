@@ -1,4 +1,4 @@
-import { democracy, dictatorship } from './governance';
+import { dictatorship, fullDemocracy, presidentialDemocracy } from './governance';
 import { fifo, roundRobin } from './ordering';
 import type { GovernanceMode, OrderingStrategy } from './types';
 
@@ -10,5 +10,5 @@ export const ORDERINGS: Record<string, OrderingStrategy> = Object.fromEntries(
 	[roundRobin, fifo].map((s) => [s.id, s])
 );
 export const GOVERNANCES: Record<string, GovernanceMode> = Object.fromEntries(
-	[democracy, dictatorship].map((g) => [g.id, g])
+	[fullDemocracy, presidentialDemocracy, dictatorship].map((g) => [g.id, g])
 );

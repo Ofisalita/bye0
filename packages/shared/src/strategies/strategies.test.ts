@@ -56,17 +56,32 @@ describe('governance', () => {
 		expect(g.handle({ type: 'remove', by: 'b', item: item('x', 'a', 0) }, ctx(guests)).kind).toBe('deny');
 	});
 
-	test('democracy: skip needs the threshold of connected guests', () => {
-		const g = GOVERNANCES.democracy!;
-		// 4 connected × 0.5 = 2 votes
-		expect(g.handle({ type: 'skip', by: 'a' }, ctx(guests))).toEqual({ kind: 'vote', have: 1, needed: 2 });
-		expect(g.handle({ type: 'skip', by: 'b' }, ctx(guests, ['a'])).kind).toBe('apply');
-		expect(g.handle({ type: 'skip', by: 'a' }, ctx(guests, ['a']))).toEqual({ kind: 'deny', reason: 'already-voted' });
+	test('both democracies: a guest skip is a vote against the threshold of connected guests', () => {
+		for (const id of ['full-democracy', 'presidential-democracy']) {
+			const g = GOVERNANCES[id]!;
+			// 4 connected × 0.5 = 2 votes
+			expect(g.handle({ type: 'skip', by: 'a' }, ctx(guests))).toEqual({ kind: 'vote', have: 1, needed: 2 });
+			expect(g.handle({ type: 'skip', by: 'b' }, ctx(guests, ['a']))).toEqual({ kind: 'vote', have: 2, needed: 2 });
+			expect(g.handle({ type: 'skip', by: 'a' }, ctx(guests, ['a']))).toEqual({ kind: 'deny', reason: 'already-voted' });
+			expect(g.handle({ type: 'remove', by: 'a', item: item('x', 'a', 0) }, ctx(guests)).kind).toBe('apply');
+			expect(g.handle({ type: 'remove', by: 'b', item: item('x', 'a', 0) }, ctx(guests)).kind).toBe('deny');
+			expect(g.handle({ type: 'bump', by: 'a', item: item('x', 'a', 0) }, ctx(guests)).kind).toBe('deny');
+		}
 	});
 
-	test('democracy: host overrides, guests cannot bump', () => {
-		const g = GOVERNANCES.democracy!;
+	test('full democracy: the host is one more voter', () => {
+		const g = GOVERNANCES['full-democracy']!;
+		expect(g.handle({ type: 'skip', by: 'h' }, ctx(guests, [], 1))).toEqual({ kind: 'vote', have: 1, needed: 4 });
+		expect(g.handle({ type: 'skip', by: 'h' }, ctx(guests, ['h'], 1))).toEqual({ kind: 'deny', reason: 'already-voted' });
+		expect(g.handle({ type: 'remove', by: 'h', item: item('x', 'a', 0) }, ctx(guests)).kind).toBe('deny');
+		expect(g.handle({ type: 'remove', by: 'h', item: item('x', 'h', 0) }, ctx(guests)).kind).toBe('apply');
+		expect(g.handle({ type: 'bump', by: 'h', item: item('x', 'h', 0) }, ctx(guests)).kind).toBe('deny');
+	});
+
+	test('presidential democracy: the host overrides', () => {
+		const g = GOVERNANCES['presidential-democracy']!;
 		expect(g.handle({ type: 'skip', by: 'h' }, ctx(guests, [], 1)).kind).toBe('apply');
-		expect(g.handle({ type: 'bump', by: 'a', item: item('x', 'a', 0) }, ctx(guests)).kind).toBe('deny');
+		expect(g.handle({ type: 'remove', by: 'h', item: item('x', 'a', 0) }, ctx(guests)).kind).toBe('apply');
+		expect(g.handle({ type: 'bump', by: 'h', item: item('x', 'a', 0) }, ctx(guests)).kind).toBe('apply');
 	});
 });

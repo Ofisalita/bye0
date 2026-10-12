@@ -221,7 +221,7 @@ export class Party {
 		if (!np) return 'nothing-playing';
 		const res = this.resolve({ type: 'skip', by }, now);
 		if (res.kind === 'deny') return res.reason;
-		if (res.kind === 'vote') np.skipVotes.push(by);
+		if (res.kind === 'vote' && res.have < res.needed) np.skipVotes.push(by);
 		else this.advance(now);
 		return null;
 	}
