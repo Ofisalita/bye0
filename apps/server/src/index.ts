@@ -25,8 +25,14 @@ const joinAttempts = new Map<string, number>();
 const topic = (party: Party) => `party:${party.id}`;
 const send = (ws: Socket, msg: ServerMessage) => ws.send(JSON.stringify(msg));
 const fail = (ws: Socket, code: ErrorCode) => send(ws, { t: 'error', code });
-const broadcast = (party: Party) =>
-	server.publish(topic(party), JSON.stringify({ t: 'state', state: party.state(Date.now()) } satisfies ServerMessage));
+/** Never throws: it also runs from socket-close and timer callbacks, where an error would exit the process. */
+function broadcast(party: Party) {
+	try {
+		server.publish(topic(party), JSON.stringify({ t: 'state', state: party.state(Date.now()) } satisfies ServerMessage));
+	} catch (err) {
+		console.error(`broadcast failed for party ${party.id}:`, err);
+	}
+}
 
 function endParty(party: Party) {
 	server.publish(topic(party), JSON.stringify({ t: 'ended' } satisfies ServerMessage));

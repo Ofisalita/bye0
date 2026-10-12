@@ -28,6 +28,14 @@ const ctx = (guests: Guest[], skipVotes: string[] = [], skipThreshold = 0.5): Pa
 });
 const ids = (q: QueueItem[]) => q.map((i) => i.id);
 
+test('lookups ignore names every object inherits', () => {
+	for (const id of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+		expect(ORDERINGS[id]).toBeUndefined();
+		expect(GOVERNANCES[id]).toBeUndefined();
+	}
+	expect(Object.keys(ORDERINGS)).toEqual(['round-robin', 'fifo']);
+});
+
 describe('ordering', () => {
 	const queue = [item('a1', 'a', 1), item('a2', 'a', 2), item('a3', 'a', 3), item('b1', 'b', 4), item('c1', 'c', 5), item('b2', 'b', 6)];
 
