@@ -63,6 +63,14 @@ describe('Party', () => {
 		expect(party.add(ana, track('ok2', 1, 30_000), 1)).toBe('queue-limit');
 	});
 
+	test('guards: a live stream never ends, so any duration limit rejects it', () => {
+		const live = { ...track('live', 1, 0), isLive: true };
+		const { party, host, ana } = setup();
+		expect(party.add(ana, live, 1)).toBe('too-long');
+		party.patchSettings({ maxDurationMs: null }, host);
+		expect(party.add(ana, live, 2)).toBeNull();
+	});
+
 	test('cooldown: a guest waits between songs; failed adds and other guests are not held up', () => {
 		const { party, ana, beto } = setup({ addCooldownMs: 30_000, maxDurationMs: 60_000 });
 		expect(party.add(ana, track('long'), 0)).toBe('too-long');
