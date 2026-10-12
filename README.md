@@ -39,6 +39,15 @@ if yours dies.
 2. paste a song link and hit **Add**.
 3. watch the queue, vote to skip, take back your own songs if you change your mind.
 
+you can also send songs straight from your music app, once you've joined:
+
+- **Android**: install bye0 from the browser menu (**Add to Home screen** / **Install app**). after that,
+  **Share → bye0** in Spotify, YouTube Music and the like adds the song.
+- **iPhone**: Safari can't do that, so make a shortcut once in the Shortcuts app: turn on **Show in Share
+  Sheet**, add **URL Encode** on the shortcut input, then **Open URLs** with
+  `https://<where bye0 lives>/share?url=` followed by the encoded text. it opens bye0 in Safari, so join the
+  party in Safari too.
+
 ## Good to know
 
 - music plays through YouTube, so **the playing device has to keep its screen on with bye0 in front**.
