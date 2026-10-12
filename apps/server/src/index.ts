@@ -84,6 +84,8 @@ async function handle(ws: Socket, msg: ClientMessage) {
 	const party = ws.data.partyId ? registry.get(ws.data.partyId) : undefined;
 	const me = ws.data.guestId;
 	if (!party || !me) return handleEntry(ws, msg);
+	// Guests in the lobby can only wait to be let in (or turned away).
+	if (party.isPending(me)) return fail(ws, 'not-allowed');
 
 	const now = Date.now();
 	/** Broadcasts on success, tells only the sender on failure. */
@@ -114,6 +116,8 @@ async function handle(ws: Socket, msg: ClientMessage) {
 			return done(party.pick(me, msg.itemId, msg.candidateIndex, now));
 		case 'settings':
 			return done(party.patchSettings(msg.patch ?? {}, me));
+		case 'approve':
+			return done(party.approve(me, msg.guestId));
 		case 'role':
 			return done(party.setRole(me, msg.guestId, msg.role));
 		case 'kick': {

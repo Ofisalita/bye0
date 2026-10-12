@@ -65,7 +65,8 @@ export class Party {
 
 	private context(now: number): PartyContext {
 		return {
-			guests: [...this.guests.values()],
+			// Guests still in the lobby aren't part of the party yet, e.g. for skip votes.
+			guests: [...this.guests.values()].filter((g) => !g.pending),
 			settings: this.settings,
 			nowPlaying: this.nowPlaying,
 			lastPlayedAt: this.lastPlayedAt,
@@ -120,6 +121,7 @@ export class Party {
 			joinedAt: now,
 			lastAddedAt: null
 		};
+		if (this.settings.approveJoins && role !== 'host') guest.pending = true;
 		this.guests.set(guest.id, guest);
 		this.tokens.set(token, guest.id);
 		return guest;
@@ -159,6 +161,18 @@ export class Party {
 		return conns;
 	}
 
+	approve(by: GuestId, guestId: GuestId): Result {
+		const target = this.guests.get(guestId);
+		if (!this.is(by, 'host')) return 'not-allowed';
+		if (!target?.pending) return 'bad-request';
+		delete target.pending;
+		return null;
+	}
+
+	isPending(id: GuestId): boolean {
+		return this.guests.get(id)?.pending === true;
+	}
+
 	setRole(by: GuestId, guestId: GuestId, role: Role): Result {
 		const target = this.guests.get(guestId);
 		if (!this.is(by, 'host') || !target || target.role === 'host' || role === 'host') return 'not-allowed';
@@ -177,6 +191,7 @@ export class Party {
 			!(next.skipThreshold > 0 && next.skipThreshold <= 1) ||
 			typeof next.showAttribution !== 'boolean' ||
 			typeof next.preferAudio !== 'boolean' ||
+			typeof next.approveJoins !== 'boolean' ||
 			!posOrNull(next.maxDurationMs) ||
 			!posOrNull(next.maxQueuedPerGuest) ||
 			!posOrNull(next.addCooldownMs)
@@ -191,8 +206,11 @@ export class Party {
 			maxDurationMs: next.maxDurationMs,
 			maxQueuedPerGuest: next.maxQueuedPerGuest,
 			addCooldownMs: next.addCooldownMs,
-			preferAudio: next.preferAudio
+			preferAudio: next.preferAudio,
+			approveJoins: next.approveJoins
 		};
+		// Nobody is left waiting for an approval that is no longer asked for.
+		if (!this.settings.approveJoins) for (const g of this.guests.values()) delete g.pending;
 		return null;
 	}
 

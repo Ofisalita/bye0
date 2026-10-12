@@ -35,7 +35,10 @@
 	const canManage = $derived(party.me?.role !== 'guest');
 	const queued = $derived((s?.queue.length ?? 0) + (np ? 1 : 0));
 	const adding = $derived(addingSince !== null && addingSince === queued && !party.error);
-	const ctx = $derived<PartyContext | null>(s ? { ...s, lastPlayedAt: {}, now: s.serverNow } : null);
+	/** Guests who are in, and those waiting in the lobby for the host. */
+	const members = $derived(s?.guests.filter((g) => !g.pending) ?? []);
+	const waiting = $derived(s?.guests.filter((g) => g.pending) ?? []);
+	const ctx = $derived<PartyContext | null>(s ? { ...s, guests: members, lastPlayedAt: {}, now: s.serverNow } : null);
 	const governance = $derived(s ? GOVERNANCES[s.settings.governance] : undefined);
 	const skip = $derived(ask({ type: 'skip' }));
 	const voted = $derived(skip?.kind === 'deny' && skip.reason === 'already-voted');
@@ -128,6 +131,11 @@
 	</main>
 {:else if !s}
 	<main class="page"><p class="dim">{m.connecting()}</p></main>
+{:else if party.me?.pending}
+	<main class="page">
+		<h1>bye0</h1>
+		<p role="status">{m.waiting_approval({ name: party.me.nickname })}</p>
+	</main>
 {:else}
 	<main class="page">
 		<header class="row">
@@ -137,6 +145,19 @@
 
 		{#if party.status === 'connecting'}
 			<p class="dim" role="status">{m.reconnecting()}</p>
+		{/if}
+
+		{#if party.isHost && waiting.length}
+			<section class="card lobby">
+				<h2>{m.lobby_title()} ({waiting.length})</h2>
+				{#each waiting as guest (guest.id)}
+					<div class="row">
+						<p class="grow ellipsis">{guest.nickname}</p>
+						<button class="small primary" onclick={() => party.send({ t: 'approve', guestId: guest.id })}>{m.let_in()}</button>
+						<button class="small danger" onclick={() => party.send({ t: 'kick', guestId: guest.id })}>{m.turn_away()}</button>
+					</div>
+				{/each}
+			</section>
 		{/if}
 
 		<section class="card">
@@ -283,11 +304,23 @@
 				{@render limitSelect(m.max_queued(), 'maxQueuedPerGuest', MAX_QUEUED_CHOICES, String, m.no_limit())}
 				{@render limitSelect(m.add_cooldown(), 'addCooldownMs', COOLDOWN_CHOICES, span, m.add_cooldown_off())}
 			</section>
+
+			<section class="card">
+				<h2>{m.who_can_join()}</h2>
+				<label class="row">
+					<input
+						type="checkbox"
+						checked={s.settings.approveJoins}
+						onchange={(e) => party.send({ t: 'settings', patch: { approveJoins: e.currentTarget.checked } })}
+					/>
+					{m.approve_joins()}
+				</label>
+			</section>
 		{/if}
 
 		<section class="card">
-			<h2>{m.guests()} ({s.guests.length})</h2>
-			{#each s.guests as guest (guest.id)}
+			<h2>{m.guests()} ({members.length})</h2>
+			{#each members as guest (guest.id)}
 				<div class="row">
 					<p class="grow ellipsis">
 						{guest.nickname}
@@ -341,7 +374,8 @@
 	input[type='range'] {
 		width: 100%;
 	}
-	.confirm {
+	.confirm,
+	.lobby {
 		outline: 2px solid var(--accent);
 	}
 </style>

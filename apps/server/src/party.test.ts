@@ -198,6 +198,39 @@ describe('Party', () => {
 		expect(party.state(52_000).playerId).toBe(ana);
 	});
 
+	test('approve joins: newcomers wait in the lobby and do not count until let in', () => {
+		const { party, host, ana, beto } = setup({ skipThreshold: 1 });
+		expect(party.patchSettings({ approveJoins: true }, host)).toBeNull();
+		expect(party.isPending(ana)).toBe(false); // already in
+		const late = party.join('cata', 'cata', 1);
+		if (typeof late === 'string') throw new Error(late);
+		party.connect('conn-cata', late.id, 1);
+		expect(late.pending).toBe(true);
+		expect((party.join('cata', 'cata again', 2) as { pending?: boolean }).pending).toBe(true); // rejoining doesn't skip the lobby
+
+		party.start(host, 2);
+		party.add(ana, track('a1'), 3);
+		party.add(ana, track('a2'), 3);
+		party.skip(host, 4);
+		party.skip(ana, 4);
+		expect(party.skip(beto, 4)).toBeNull(); // 3 of 3: cata in the lobby doesn't raise the bar
+		expect(party.nowPlaying?.item.title).toBe('a2');
+
+		expect(party.approve(ana, late.id)).toBe('not-allowed');
+		expect(party.approve(host, late.id)).toBeNull();
+		expect(party.isPending(late.id)).toBe(false);
+		expect(party.approve(host, late.id)).toBe('bad-request'); // already in
+	});
+
+	test('approve joins: turning it off lets everyone waiting in', () => {
+		const { party, host } = setup();
+		party.patchSettings({ approveJoins: true }, host);
+		const g = party.join('cata', 'cata', 1) as { id: string };
+		expect(party.isPending(g.id)).toBe(true);
+		expect(party.patchSettings({ approveJoins: false }, host)).toBeNull();
+		expect(party.isPending(g.id)).toBe(false);
+	});
+
 	test('kick bans the device and drops its songs', () => {
 		const { party, host, ana } = setup();
 		party.add(ana, track('a1'), 1);

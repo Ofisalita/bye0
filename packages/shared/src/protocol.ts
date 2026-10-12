@@ -16,6 +16,8 @@ export type ClientMessage =
 	| { t: 'settings'; patch: Partial<PartySettings> }
 	| { t: 'role'; guestId: GuestId; role: Exclude<Role, 'host'> }
 	| { t: 'kick'; guestId: GuestId }
+	/** Let a guest in from the lobby. Turning one away is a kick. */
+	| { t: 'approve'; guestId: GuestId }
 	| { t: 'end' }
 	// Player view only
 	| { t: 'player.claim' }

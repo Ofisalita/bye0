@@ -9,6 +9,8 @@ export interface Guest {
 	joinedAt: number;
 	/** When one of this guest's songs last made it into the queue; drives the add cooldown. */
 	lastAddedAt: number | null;
+	/** Waiting in the lobby for the host to let them in. */
+	pending?: boolean;
 }
 
 /** A playable YouTube video, as returned by the matching service. */
@@ -63,6 +65,8 @@ export interface PartySettings {
 	addCooldownMs: number | null;
 	/** For pasted YouTube music videos, play the official audio upload instead (nidol D7). */
 	preferAudio: boolean;
+	/** New guests wait in a lobby until the host lets them in. */
+	approveJoins: boolean;
 }
 
 /** What strategies get to look at. */
@@ -98,7 +102,8 @@ export const DEFAULT_SETTINGS: PartySettings = {
 	maxDurationMs: 10 * 60_000,
 	maxQueuedPerGuest: null,
 	addCooldownMs: null,
-	preferAudio: false
+	preferAudio: false,
+	approveJoins: false
 };
 
 export interface Preset {
