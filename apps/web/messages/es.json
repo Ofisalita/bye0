@@ -57,6 +57,7 @@
 	"governance_full_democracy": "Democracia plena (el anfitrión vota como todos)",
 	"governance_presidential_democracy": "Democracia presidencial (el anfitrión puede imponerse)",
 	"skip_threshold": "Votos necesarios para saltar: {percent}%",
+	"skip_counts_offline": "Los invitados desconectados también cuentan para los votos de salto",
 	"show_attribution": "Mostrar quién agregó cada canción",
 	"allow_collections": "Permitir agregar álbumes y playlists completos",
 	"prefer_audio": "Usar la versión de audio de los videoclips pegados",

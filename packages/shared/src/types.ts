@@ -63,8 +63,10 @@ export interface NowPlaying {
 export interface PartySettings {
 	ordering: string;
 	governance: string;
-	/** Democracy: fraction of connected guests needed to skip (0–1]. */
+	/** Democracy: fraction of the guests needed to skip (0–1]. */
 	skipThreshold: number;
+	/** Democracy: guests who are offline right now still count toward that fraction. */
+	skipCountsOffline: boolean;
 	showAttribution: boolean;
 	maxDurationMs: number | null;
 	maxQueuedPerGuest: number | null;
@@ -124,6 +126,7 @@ export const DEFAULT_SETTINGS: PartySettings = {
 	ordering: 'round-robin',
 	governance: 'full-democracy',
 	skipThreshold: 0.5,
+	skipCountsOffline: false,
 	showAttribution: true,
 	maxDurationMs: 10 * 60_000,
 	maxQueuedPerGuest: null,

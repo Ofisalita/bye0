@@ -9,8 +9,9 @@ const isHost = (id: GuestId, ctx: PartyContext) =>
 
 /** Votes needed to skip: a fraction of the guests currently connected, at least 1. */
 export function skipVotesNeeded(ctx: PartyContext): number {
-	const active = ctx.guests.filter((g) => g.connected).length;
-	return Math.max(1, Math.ceil(active * ctx.settings.skipThreshold));
+	// …or of all the guests when the host counts offline ones, so a phone going to sleep doesn't lower the bar.
+	const voters = ctx.guests.filter((g) => g.connected || ctx.settings.skipCountsOffline).length;
+	return Math.max(1, Math.ceil(voters * ctx.settings.skipThreshold));
 }
 
 /** Host only. Guests may still take back their own songs. */

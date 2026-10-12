@@ -57,6 +57,7 @@
 	"governance_full_democracy": "Full democracy (the host votes like everyone)",
 	"governance_presidential_democracy": "Presidential democracy (the host can override)",
 	"skip_threshold": "Votes needed to skip: {percent}%",
+	"skip_counts_offline": "Guests who are offline still count for skip votes",
 	"show_attribution": "Show who added each song",
 	"allow_collections": "Let guests add whole albums and playlists",
 	"prefer_audio": "Play the audio version of pasted music videos",
