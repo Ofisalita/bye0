@@ -32,16 +32,20 @@ export function duration(ms: number): string {
 const LABELS: Record<string, () => string> = {
 	fifo: m.ordering_fifo,
 	'round-robin': m.ordering_round_robin,
+	shuffle: m.ordering_shuffle,
 	dictatorship: m.governance_dictatorship,
+	anarchy: m.governance_anarchy,
 	'full-democracy': m.governance_full_democracy,
 	'presidential-democracy': m.governance_presidential_democracy,
 	'chill-dinner': m.preset_chill_dinner,
-	'house-party': m.preset_house_party
+	'house-party': m.preset_house_party,
+	chaos: m.preset_chaos
 };
 export const label = (id: string) => LABELS[id]?.() ?? id;
 
 const HINTS: Record<string, () => string> = {
 	'chill-dinner': m.preset_chill_dinner_hint,
-	'house-party': m.preset_house_party_hint
+	'house-party': m.preset_house_party_hint,
+	chaos: m.preset_chaos_hint
 };
 export const hint = (id: string) => HINTS[id]?.() ?? '';
