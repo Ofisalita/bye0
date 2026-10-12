@@ -198,6 +198,71 @@ describe('Party', () => {
 		expect(party.state(52_000).playerId).toBe(ana);
 	});
 
+	test('approve joins: newcomers wait in the lobby and do not count until let in', () => {
+		const { party, host, ana, beto } = setup({ skipThreshold: 1 });
+		expect(party.patchSettings({ approveJoins: true }, host)).toBeNull();
+		expect(party.isPending(ana)).toBe(false); // already in
+		const late = party.join('cata', 'cata', 1);
+		if (typeof late === 'string') throw new Error(late);
+		party.connect('conn-cata', late.id, 1);
+		expect(late.pending).toBe(true);
+		expect((party.join('cata', 'cata again', 2) as { pending?: boolean }).pending).toBe(true); // rejoining doesn't skip the lobby
+
+		party.start(host, 2);
+		party.add(ana, track('a1'), 3);
+		party.add(ana, track('a2'), 3);
+		party.skip(host, 4);
+		party.skip(ana, 4);
+		expect(party.skip(beto, 4)).toBeNull(); // 3 of 3: cata in the lobby doesn't raise the bar
+		expect(party.nowPlaying?.item.title).toBe('a2');
+
+		expect(party.approve(ana, late.id)).toBe('not-allowed');
+		expect(party.approve(host, late.id)).toBeNull();
+		expect(party.isPending(late.id)).toBe(false);
+		expect(party.approve(host, late.id)).toBe('bad-request'); // already in
+	});
+
+	test('approve joins: turning it off lets everyone waiting in', () => {
+		const { party, host } = setup();
+		party.patchSettings({ approveJoins: true }, host);
+		const g = party.join('cata', 'cata', 1) as { id: string };
+		expect(party.isPending(g.id)).toBe(true);
+		expect(party.patchSettings({ approveJoins: false }, host)).toBeNull();
+		expect(party.isPending(g.id)).toBe(false);
+	});
+
+	test('lock: no new guests, but anyone already in can come back', () => {
+		const { party, host } = setup();
+		expect(party.patchSettings({ locked: true }, host)).toBeNull();
+		expect(party.join('cata', 'cata', 1)).toBe('locked');
+		expect(party.join('ana', 'ana', 1)).toMatchObject({ nickname: 'ana' });
+		party.patchSettings({ locked: false }, host);
+		expect(party.join('cata', 'cata', 2)).toMatchObject({ nickname: 'cata' });
+	});
+
+	test('auto-lock counts from when the party was created', () => {
+		const { party, host } = setup({ autoLockMs: 60_000 }); // created at 0
+		expect(party.join('cata', 'cata', 59_999)).toMatchObject({ nickname: 'cata' });
+		expect(party.join('dani', 'dani', 60_000)).toBe('locked');
+		expect(party.state(60_000).createdAt).toBe(0);
+		party.patchSettings({ autoLockMs: null }, host);
+		expect(party.join('dani', 'dani', 60_001)).toMatchObject({ nickname: 'dani' });
+		expect(party.patchSettings({ autoLockMs: 0 }, host)).toBe('bad-request');
+	});
+
+	test('same network: newcomers must share a network the host connected from', () => {
+		const { party, host } = setup();
+		party.patchSettings({ sameNetwork: true }, host);
+		party.connect('conn-host-wifi', host, 1, '203.0.113.7');
+		party.connect('conn-host-v6', host, 1, '2001:db8:1:2::9');
+		expect(party.join('cata', 'cata', 2, 'guest', '203.0.113.7')).toMatchObject({ nickname: 'cata' });
+		expect(party.join('dani', 'dani', 2, 'guest', '2001:db8:1:2::42')).toMatchObject({ nickname: 'dani' });
+		expect(party.join('eli', 'eli', 2, 'guest', '198.51.100.1')).toBe('other-network');
+		expect(party.join('ana', 'ana', 2, 'guest', '198.51.100.1')).toMatchObject({ nickname: 'ana' }); // already in
+		party.patchSettings({ sameNetwork: false }, host);
+		expect(party.join('eli', 'eli', 3, 'guest', '198.51.100.1')).toMatchObject({ nickname: 'eli' });
+	});
+
 	test('kick bans the device and drops its songs', () => {
 		const { party, host, ana } = setup();
 		party.add(ana, track('a1'), 1);

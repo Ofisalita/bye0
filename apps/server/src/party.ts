@@ -3,6 +3,7 @@ import {
 	CONFIRM_MS,
 	DEFAULT_SETTINGS,
 	GOVERNANCES,
+	isLocked,
 	NICKNAME_MAX,
 	ORDERINGS,
 	type Candidate,
@@ -17,6 +18,7 @@ import {
 	type NowPlaying,
 	type Role
 } from '@bye0/shared';
+import { sameNetwork } from './network';
 
 export interface ResolvedTrack {
 	title: string;
@@ -41,6 +43,7 @@ export class Party {
 	previousCode: string | null = null;
 	codeRotatedAt = 0;
 	lastActivity: number;
+	readonly createdAt: number;
 
 	started = false;
 	settings: PartySettings;
@@ -54,9 +57,12 @@ export class Party {
 	private conns = new Map<string, GuestId>();
 	private playerConn: string | null = null;
 	private lastPlayedAt: Record<GuestId, number> = {};
+	/** Every address the host has connected from: the networks "same network" lets in. */
+	private hostIps = new Set<string>();
 
 	constructor(now: number, settings: Partial<PartySettings> = {}) {
 		this.lastActivity = now;
+		this.createdAt = now;
 		this.settings = { ...DEFAULT_SETTINGS };
 		this.patchSettings(settings);
 	}
@@ -65,7 +71,8 @@ export class Party {
 
 	private context(now: number): PartyContext {
 		return {
-			guests: [...this.guests.values()],
+			// Guests still in the lobby aren't part of the party yet, e.g. for skip votes.
+			guests: [...this.guests.values()].filter((g) => !g.pending),
 			settings: this.settings,
 			nowPlaying: this.nowPlaying,
 			lastPlayedAt: this.lastPlayedAt,
@@ -86,6 +93,7 @@ export class Party {
 		return {
 			id: this.id,
 			code: this.code,
+			createdAt: this.createdAt,
 			started: this.started,
 			guests: [...this.guests.values()],
 			queue: this.orderedQueue(now),
@@ -103,7 +111,8 @@ export class Party {
 
 	// --- membership ---
 
-	join(token: string, nickname: string, now: number, role: Role = 'guest'): Guest | ErrorCode {
+	/** `ip` is the device's public address, for the same-network check. */
+	join(token: string, nickname: string, now: number, role: Role = 'guest', ip = ''): Guest | ErrorCode {
 		if (this.banned.has(token)) return 'banned';
 		const name = nickname.trim().slice(0, NICKNAME_MAX);
 		if (!name || !token) return 'bad-request';
@@ -112,6 +121,9 @@ export class Party {
 			existing.nickname = name;
 			return existing;
 		}
+		if (role !== 'host' && isLocked(this.settings, this.createdAt, now)) return 'locked';
+		if (role !== 'host' && this.settings.sameNetwork && ![...this.hostIps].some((h) => sameNetwork(ip, h)))
+			return 'other-network';
 		const guest: Guest = {
 			id: crypto.randomUUID(),
 			nickname: name,
@@ -120,14 +132,17 @@ export class Party {
 			joinedAt: now,
 			lastAddedAt: null
 		};
+		if (this.settings.approveJoins && role !== 'host') guest.pending = true;
 		this.guests.set(guest.id, guest);
 		this.tokens.set(token, guest.id);
 		return guest;
 	}
 
-	connect(connId: string, guestId: GuestId, now: number): void {
+	connect(connId: string, guestId: GuestId, now: number, ip = ''): void {
 		this.conns.set(connId, guestId);
-		this.guests.get(guestId)!.connected = true;
+		const guest = this.guests.get(guestId)!;
+		guest.connected = true;
+		if (guest.role === 'host' && ip) this.hostIps.add(ip);
 		this.lastActivity = now;
 	}
 
@@ -159,6 +174,18 @@ export class Party {
 		return conns;
 	}
 
+	approve(by: GuestId, guestId: GuestId): Result {
+		const target = this.guests.get(guestId);
+		if (!this.is(by, 'host')) return 'not-allowed';
+		if (!target?.pending) return 'bad-request';
+		delete target.pending;
+		return null;
+	}
+
+	isPending(id: GuestId): boolean {
+		return this.guests.get(id)?.pending === true;
+	}
+
 	setRole(by: GuestId, guestId: GuestId, role: Role): Result {
 		const target = this.guests.get(guestId);
 		if (!this.is(by, 'host') || !target || target.role === 'host' || role === 'host') return 'not-allowed';
@@ -177,6 +204,10 @@ export class Party {
 			!(next.skipThreshold > 0 && next.skipThreshold <= 1) ||
 			typeof next.showAttribution !== 'boolean' ||
 			typeof next.preferAudio !== 'boolean' ||
+			typeof next.approveJoins !== 'boolean' ||
+			typeof next.locked !== 'boolean' ||
+			typeof next.sameNetwork !== 'boolean' ||
+			!posOrNull(next.autoLockMs) ||
 			!posOrNull(next.maxDurationMs) ||
 			!posOrNull(next.maxQueuedPerGuest) ||
 			!posOrNull(next.addCooldownMs)
@@ -191,8 +222,14 @@ export class Party {
 			maxDurationMs: next.maxDurationMs,
 			maxQueuedPerGuest: next.maxQueuedPerGuest,
 			addCooldownMs: next.addCooldownMs,
-			preferAudio: next.preferAudio
+			preferAudio: next.preferAudio,
+			approveJoins: next.approveJoins,
+			locked: next.locked,
+			autoLockMs: next.autoLockMs,
+			sameNetwork: next.sameNetwork
 		};
+		// Nobody is left waiting for an approval that is no longer asked for.
+		if (!this.settings.approveJoins) for (const g of this.guests.values()) delete g.pending;
 		return null;
 	}
 

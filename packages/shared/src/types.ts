@@ -9,6 +9,8 @@ export interface Guest {
 	joinedAt: number;
 	/** When one of this guest's songs last made it into the queue; drives the add cooldown. */
 	lastAddedAt: number | null;
+	/** Waiting in the lobby for the host to let them in. */
+	pending?: boolean;
 }
 
 /** A playable YouTube video, as returned by the matching service. */
@@ -63,6 +65,14 @@ export interface PartySettings {
 	addCooldownMs: number | null;
 	/** For pasted YouTube music videos, play the official audio upload instead (nidol D7). */
 	preferAudio: boolean;
+	/** New guests wait in a lobby until the host lets them in. */
+	approveJoins: boolean;
+	/** No new guests; anyone already in can still come back. */
+	locked: boolean;
+	/** Locks the party this long after it was created. */
+	autoLockMs: number | null;
+	/** New guests must come from the host's network (same public IPv4, or IPv6 /64). */
+	sameNetwork: boolean;
 }
 
 /** What strategies get to look at. */
@@ -79,6 +89,7 @@ export interface PartyContext {
 export interface PartyState {
 	id: string;
 	code: string;
+	createdAt: number;
 	started: boolean;
 	guests: Guest[];
 	/** Already in play order. */
@@ -98,8 +109,16 @@ export const DEFAULT_SETTINGS: PartySettings = {
 	maxDurationMs: 10 * 60_000,
 	maxQueuedPerGuest: null,
 	addCooldownMs: null,
-	preferAudio: false
+	preferAudio: false,
+	approveJoins: false,
+	locked: false,
+	autoLockMs: null,
+	sameNetwork: false
 };
+
+/** Whether new guests are kept out: locked by hand, or the auto-lock time has come. */
+export const isLocked = (settings: PartySettings, createdAt: number, now: number): boolean =>
+	settings.locked || (settings.autoLockMs !== null && now - createdAt >= settings.autoLockMs);
 
 export interface Preset {
 	id: string;

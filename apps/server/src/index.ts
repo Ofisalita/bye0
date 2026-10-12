@@ -44,7 +44,7 @@ function endParty(party: Party) {
 function enter(ws: Socket, party: Party, guestId: string) {
 	ws.data.partyId = party.id;
 	ws.data.guestId = guestId;
-	party.connect(ws.data.id, guestId, Date.now());
+	party.connect(ws.data.id, guestId, Date.now(), ws.data.ip);
 	ws.subscribe(topic(party));
 	send(ws, { t: 'welcome', you: guestId, state: party.state(Date.now()) });
 	broadcast(party);
@@ -65,7 +65,7 @@ function handleEntry(ws: Socket, msg: ClientMessage) {
 		case 'join': {
 			const party = registry.join(String(msg.code), ws.data.ip, now);
 			if (typeof party === 'string') return fail(ws, party);
-			const guest = party.join(msg.token, msg.nickname, now);
+			const guest = party.join(msg.token, msg.nickname, now, 'guest', ws.data.ip);
 			if (typeof guest === 'string') return fail(ws, guest);
 			return enter(ws, party, guest.id);
 		}
@@ -84,6 +84,8 @@ async function handle(ws: Socket, msg: ClientMessage) {
 	const party = ws.data.partyId ? registry.get(ws.data.partyId) : undefined;
 	const me = ws.data.guestId;
 	if (!party || !me) return handleEntry(ws, msg);
+	// Guests in the lobby can only wait to be let in (or turned away).
+	if (party.isPending(me)) return fail(ws, 'not-allowed');
 
 	const now = Date.now();
 	/** Broadcasts on success, tells only the sender on failure. */
@@ -114,6 +116,8 @@ async function handle(ws: Socket, msg: ClientMessage) {
 			return done(party.pick(me, msg.itemId, msg.candidateIndex, now));
 		case 'settings':
 			return done(party.patchSettings(msg.patch ?? {}, me));
+		case 'approve':
+			return done(party.approve(me, msg.guestId));
 		case 'role':
 			return done(party.setRole(me, msg.guestId, msg.role));
 		case 'kick': {

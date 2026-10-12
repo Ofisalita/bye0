@@ -30,6 +30,8 @@ export class PartyClient {
 	you = $state<string | null>(null);
 	error = $state<ErrorCode | null>(null);
 	status = $state<'idle' | 'connecting' | 'open' | 'ended'>('idle');
+	/** Why this device is out of the party, when it wasn't simply ended. Unlike `error`, it stays. */
+	endReason = $state<ErrorCode | null>(null);
 	/** Add to Date.now() to get the server's clock. */
 	clockOffset = 0;
 
@@ -44,6 +46,7 @@ export class PartyClient {
 	enter(entry: Entry): void {
 		if ('nickname' in entry) localStorage.setItem(NICKNAME_KEY, entry.nickname);
 		this.entry = entry;
+		this.endReason = null;
 		this.open();
 	}
 
@@ -105,7 +108,10 @@ export class PartyClient {
 				this.leave();
 				break;
 			case 'error':
-				if (msg.code === 'party-gone' || msg.code === 'banned') this.leave();
+				if (msg.code === 'party-gone' || msg.code === 'banned') {
+					this.leave();
+					this.endReason = msg.code;
+				}
 				this.error = msg.code;
 				clearTimeout(this.errorTimer);
 				this.errorTimer = setTimeout(() => (this.error = null), ERROR_SHOWN_MS);

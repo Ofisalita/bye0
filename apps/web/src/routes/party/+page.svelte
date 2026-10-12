@@ -1,13 +1,33 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { CONFIRM_MS, GOVERNANCES, ORDERINGS, skipVotesNeeded, type PartyContext, type QueueItem, type Resolution } from '@bye0/shared';
+	import {
+		CONFIRM_MS,
+		GOVERNANCES,
+		isLocked,
+		ORDERINGS,
+		skipVotesNeeded,
+		type PartyContext,
+		type PartySettings,
+		type QueueItem,
+		type Resolution
+	} from '@bye0/shared';
 	import CandidatePicker from '#lib/CandidatePicker.svelte';
 	import { m } from '#lib/paraglide/messages.js';
+	import { getLocale } from '#lib/paraglide/runtime.js';
 	import { party } from '#lib/party.svelte.ts';
 	import { errorText, label } from '#lib/text.ts';
 
+	// Choices for the host's limits; null turns a limit off.
+	const MAX_DURATION_CHOICES = [null, 5, 7, 10, 15, 20, 30].map((min) => min && min * 60_000);
+	const MAX_QUEUED_CHOICES = [null, 1, 2, 3, 5, 10];
 	const COOLDOWN_CHOICES = [null, 15_000, 30_000, 60_000, 120_000, 300_000];
+	const AUTO_LOCK_CHOICES = [null, 15, 30, 60, 120, 180].map((min) => min && min * 60_000);
+	type Limit = 'maxDurationMs' | 'maxQueuedPerGuest' | 'addCooldownMs' | 'autoLockMs';
+	const setLimit = (key: Limit, value: string) =>
+		party.send({ t: 'settings', patch: { [key]: Number(value) || null } as Partial<PartySettings> });
+	const span = (ms: number) =>
+		ms < 60_000 ? m.seconds({ n: ms / 1000 }) : ms < 3_600_000 ? m.minutes({ n: ms / 60_000 }) : m.hours({ n: ms / 3_600_000 });
 
 	let input = $state('');
 	/** Queue length when the last add was sent; the add is done once it changes or an error arrives. */
@@ -18,7 +38,10 @@
 	const canManage = $derived(party.me?.role !== 'guest');
 	const queued = $derived((s?.queue.length ?? 0) + (np ? 1 : 0));
 	const adding = $derived(addingSince !== null && addingSince === queued && !party.error);
-	const ctx = $derived<PartyContext | null>(s ? { ...s, lastPlayedAt: {}, now: s.serverNow } : null);
+	/** Guests who are in, and those waiting in the lobby for the host. */
+	const members = $derived(s?.guests.filter((g) => !g.pending) ?? []);
+	const waiting = $derived(s?.guests.filter((g) => g.pending) ?? []);
+	const ctx = $derived<PartyContext | null>(s ? { ...s, guests: members, lastPlayedAt: {}, now: s.serverNow } : null);
 	const governance = $derived(s ? GOVERNANCES[s.settings.governance] : undefined);
 	const skip = $derived(ask({ type: 'skip' }));
 	const voted = $derived(skip?.kind === 'deny' && skip.reason === 'already-voted');
@@ -47,6 +70,18 @@
 	const confirmSeconds = $derived(
 		confirming?.confirmBy ? Math.ceil(Math.min(CONFIRM_MS, confirming.confirmBy - serverNow) / 1000) : 0
 	);
+	const locked = $derived(s ? isLocked(s.settings, s.createdAt, serverNow) : false);
+	/** When the auto-lock kicks in, on this device's clock; null if it's off or already happened. */
+	const locksAt = $derived(
+		s?.settings.autoLockMs && !locked ? new Date(s.createdAt + s.settings.autoLockMs - party.clockOffset) : null
+	);
+
+	function setLocked(on: boolean) {
+		// Unlocking after an auto-lock also turns the auto-lock off, or it would lock again at once.
+		const autoLocked = !s?.settings.locked && locked;
+		party.send({ t: 'settings', patch: on ? { locked: true } : { locked: false, ...(autoLocked && { autoLockMs: null }) } });
+	}
+
 	/** Item whose versions the host has open. */
 	let picking = $state<string | null>(null);
 	const canPick = (item: QueueItem) => party.isHost && item.candidates.length > 1;
@@ -93,13 +128,29 @@
 	}
 </script>
 
+{#snippet limitSelect(text: string, key: Limit, choices: (number | null)[], show: (n: number) => string, off: string)}
+	<label>
+		<span class="dim">{text}</span>
+		<select value={String(s?.settings[key])} onchange={(e) => setLimit(key, e.currentTarget.value)}>
+			{#each choices as n (n)}
+				<option value={String(n)}>{n === null ? off : show(n)}</option>
+			{/each}
+		</select>
+	</label>
+{/snippet}
+
 {#if party.status === 'ended'}
 	<main class="page">
-		<p>{party.error ? errorText(party.error) : m.party_ended()}</p>
+		<p>{party.endReason ? errorText(party.endReason) : m.party_ended()}</p>
 		<a href={resolve('/')}>{m.back_home()}</a>
 	</main>
 {:else if !s}
 	<main class="page"><p class="dim">{m.connecting()}</p></main>
+{:else if party.me?.pending}
+	<main class="page">
+		<h1>bye0</h1>
+		<p role="status">{m.waiting_approval({ name: party.me.nickname })}</p>
+	</main>
 {:else}
 	<main class="page">
 		<header class="row">
@@ -109,6 +160,19 @@
 
 		{#if party.status === 'connecting'}
 			<p class="dim" role="status">{m.reconnecting()}</p>
+		{/if}
+
+		{#if party.isHost && waiting.length}
+			<section class="card lobby">
+				<h2>{m.lobby_title()} ({waiting.length})</h2>
+				{#each waiting as guest (guest.id)}
+					<div class="row">
+						<p class="grow ellipsis">{guest.nickname}</p>
+						<button class="small primary" onclick={() => party.send({ t: 'approve', guestId: guest.id })}>{m.let_in()}</button>
+						<button class="small danger" onclick={() => party.send({ t: 'kick', guestId: guest.id })}>{m.turn_away()}</button>
+					</div>
+				{/each}
+			</section>
 		{/if}
 
 		<section class="card">
@@ -231,19 +295,6 @@
 						/>
 					</label>
 				{/if}
-				<label>
-					<span class="dim">{m.add_cooldown()}</span>
-					<select
-						value={String(s.settings.addCooldownMs)}
-						onchange={(e) => party.send({ t: 'settings', patch: { addCooldownMs: Number(e.currentTarget.value) || null } })}
-					>
-						{#each COOLDOWN_CHOICES as ms (ms)}
-							<option value={String(ms)}>
-								{ms === null ? m.add_cooldown_off() : ms < 60_000 ? m.seconds({ n: ms / 1000 }) : m.minutes({ n: ms / 60_000 })}
-							</option>
-						{/each}
-					</select>
-				</label>
 				<label class="row">
 					<input
 						type="checkbox"
@@ -261,11 +312,49 @@
 					{m.show_attribution()}
 				</label>
 			</section>
+
+			<section class="card">
+				<h2>{m.limits()}</h2>
+				{@render limitSelect(m.max_duration(), 'maxDurationMs', MAX_DURATION_CHOICES, span, m.no_limit())}
+				{@render limitSelect(m.max_queued(), 'maxQueuedPerGuest', MAX_QUEUED_CHOICES, String, m.no_limit())}
+				{@render limitSelect(m.add_cooldown(), 'addCooldownMs', COOLDOWN_CHOICES, span, m.add_cooldown_off())}
+			</section>
+
+			<section class="card">
+				<h2>{m.who_can_join()}</h2>
+				<label class="row">
+					<input
+						type="checkbox"
+						checked={s.settings.approveJoins}
+						onchange={(e) => party.send({ t: 'settings', patch: { approveJoins: e.currentTarget.checked } })}
+					/>
+					{m.approve_joins()}
+				</label>
+				<label class="row">
+					<input type="checkbox" checked={locked} onchange={(e) => setLocked(e.currentTarget.checked)} />
+					{m.lock_party()}
+				</label>
+				{@render limitSelect(m.auto_lock(), 'autoLockMs', AUTO_LOCK_CHOICES, span, m.auto_lock_off())}
+				{#if locksAt}
+					<p class="dim">{m.locks_at({ time: locksAt.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' }) })}</p>
+				{/if}
+				<label class="row">
+					<input
+						type="checkbox"
+						checked={s.settings.sameNetwork}
+						onchange={(e) => party.send({ t: 'settings', patch: { sameNetwork: e.currentTarget.checked } })}
+					/>
+					{m.same_network()}
+				</label>
+				{#if s.settings.sameNetwork}
+					<p class="dim">{m.same_network_hint()}</p>
+				{/if}
+			</section>
 		{/if}
 
 		<section class="card">
-			<h2>{m.guests()} ({s.guests.length})</h2>
-			{#each s.guests as guest (guest.id)}
+			<h2>{m.guests()} ({members.length})</h2>
+			{#each members as guest (guest.id)}
 				<div class="row">
 					<p class="grow ellipsis">
 						{guest.nickname}
@@ -319,7 +408,8 @@
 	input[type='range'] {
 		width: 100%;
 	}
-	.confirm {
+	.confirm,
+	.lobby {
 		outline: 2px solid var(--accent);
 	}
 </style>
