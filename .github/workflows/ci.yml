@@ -1,0 +1,19 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.x # same as the Dockerfile
+      - run: bun install --frozen-lockfile
+      - run: bun run test
+      - run: bun run check
+      - run: bun --filter @bye0/web build
