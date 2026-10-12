@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { GOVERNANCES, ORDERINGS, skipVotesNeeded, type PartyContext, type QueueItem, type Resolution } from '@bye0/shared';
+	import { CONFIRM_MS, GOVERNANCES, ORDERINGS, skipVotesNeeded, type PartyContext, type QueueItem, type Resolution } from '@bye0/shared';
+	import CandidatePicker from '#lib/CandidatePicker.svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import { party } from '#lib/party.svelte.ts';
 	import { errorText, label } from '#lib/text.ts';
@@ -23,19 +24,37 @@
 	const voted = $derived(skip?.kind === 'deny' && skip.reason === 'already-voted');
 	const tally = $derived(ctx && np ? { have: np.skipVotes.length, needed: skipVotesNeeded(ctx) } : null);
 
-	/** Ticks once a second while a cooldown is set, so the wait counts down. */
+	/** Ticks once a second so countdowns (add cooldown, match confirmation) move. */
 	let clock = $state(Date.now());
 	$effect(() => {
-		if (!s?.settings.addCooldownMs) return;
 		const tick = setInterval(() => (clock = Date.now()), 1_000);
 		return () => clearInterval(tick);
 	});
+	const serverNow = $derived(clock + party.clockOffset);
 	const waitSeconds = $derived.by(() => {
 		const cooldown = s?.settings.addCooldownMs;
 		const last = party.me?.lastAddedAt;
 		if (!cooldown || last == null) return 0;
-		return Math.ceil(Math.min(cooldown, last + cooldown - (clock + party.clockOffset)) / 1000);
+		return Math.ceil(Math.min(cooldown, last + cooldown - serverNow) / 1000);
 	});
+
+	/** My most recent song whose match the server wants me to confirm, while there's still time. */
+	const confirming = $derived(
+		[...(s?.queue ?? []), ...(np ? [np.item] : [])]
+			.filter((i) => i.addedBy === party.you && i.confirmBy !== undefined && i.confirmBy > serverNow)
+			.sort((a, b) => b.addedAt - a.addedAt)[0]
+	);
+	const confirmSeconds = $derived(
+		confirming?.confirmBy ? Math.ceil(Math.min(CONFIRM_MS, confirming.confirmBy - serverNow) / 1000) : 0
+	);
+	/** Item whose versions the host has open. */
+	let picking = $state<string | null>(null);
+	const canPick = (item: QueueItem) => party.isHost && item.candidates.length > 1;
+
+	function pick(itemId: string, candidateIndex: number) {
+		party.send({ t: 'pick', itemId, candidateIndex });
+		picking = null;
+	}
 
 	type Ask = { type: 'skip' } | { type: 'remove' | 'bump'; item: QueueItem };
 	/** What the active rules would answer if this guest tried it. The server has the last word. */
@@ -95,10 +114,20 @@
 		<section class="card">
 			<h2>{m.now_playing()}</h2>
 			{#if np}
-				<div>
-					<p class="ellipsis"><strong>{np.item.title}</strong></p>
-					<p class="dim ellipsis">{subtitle(np.item)}</p>
+				<div class="row">
+					<div class="grow">
+						<p class="ellipsis"><strong>{np.item.title}</strong></p>
+						<p class="dim ellipsis">{subtitle(np.item)}</p>
+					</div>
+					{#if canPick(np.item)}
+						<button class="small" aria-expanded={picking === np.item.id} onclick={() => (picking = picking === np.item.id ? null : np.item.id)}>
+							{m.change_version()}
+						</button>
+					{/if}
 				</div>
+				{#if picking === np.item.id}
+					<CandidatePicker item={np.item} onpick={(i) => pick(np.item.id, i)} />
+				{/if}
 				{#if !s.playerId}
 					<p class="dim">{m.no_player()}</p>
 				{:else if np.paused}
@@ -133,6 +162,15 @@
 			<p class="dim" role="status">{m.add_cooldown_wait({ seconds: waitSeconds })}</p>
 		{/if}
 
+		{#if confirming}
+			{@const item = confirming}
+			<section class="card confirm">
+				<h2>{m.confirm_title()}</h2>
+				<p class="dim" role="status">{m.confirm_hint({ title: item.title, seconds: confirmSeconds })}</p>
+				<CandidatePicker {item} onpick={(i) => pick(item.id, i)} />
+			</section>
+		{/if}
+
 		<section class="card">
 			<h2>{m.up_next()}</h2>
 			{#each s.queue as item (item.id)}
@@ -141,6 +179,11 @@
 						<p class="ellipsis">{item.title}</p>
 						<p class="dim ellipsis">{subtitle(item)}</p>
 					</div>
+					{#if canPick(item)}
+						<button class="small" aria-expanded={picking === item.id} onclick={() => (picking = picking === item.id ? null : item.id)}>
+							{m.change_version()}
+						</button>
+					{/if}
 					{#if may({ type: 'bump', item })}
 						<button class="small" onclick={() => party.send({ t: 'bump', itemId: item.id })}>{m.bump()}</button>
 					{/if}
@@ -148,6 +191,9 @@
 						<button class="small danger" onclick={() => party.send({ t: 'remove', itemId: item.id })}>{m.remove()}</button>
 					{/if}
 				</div>
+				{#if picking === item.id}
+					<CandidatePicker {item} onpick={(i) => pick(item.id, i)} />
+				{/if}
 			{:else}
 				<p class="dim">{m.queue_empty()}</p>
 			{/each}
@@ -264,5 +310,8 @@
 	}
 	input[type='range'] {
 		width: 100%;
+	}
+	.confirm {
+		outline: 2px solid var(--accent);
 	}
 </style>

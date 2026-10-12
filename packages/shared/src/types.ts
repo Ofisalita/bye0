@@ -20,6 +20,7 @@ export interface Candidate {
 	durationMs: number;
 	kind?: string;
 	confidence?: number;
+	thumbnailUrl?: string;
 }
 
 export interface QueueItem {
@@ -34,6 +35,11 @@ export interface QueueItem {
 	candidateIndex: number;
 	/** Set when someone with the right to do so moved it to the front. */
 	bumpedAt?: number;
+	/**
+	 * Set when the matching service wasn't sure of the match: until then (server time) whoever
+	 * added it can pick one of the top candidates. Cleared once someone picks.
+	 */
+	confirmBy?: number;
 }
 
 export interface NowPlaying {

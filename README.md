@@ -56,6 +56,7 @@ bye0 is in early development.
 |---|---|
 | YouTube and YouTube Music links | ✅ |
 | Spotify song links | ✅ if you also run the matching service (see below) |
+| choosing the right version when the match is unsure | ✅ (with the matching service) |
 | Spotify albums and playlists | 🚧 coming next |
 | Apple Music, Deezer, Tidal links | 🚧 coming next |
 | searching for a song by name | 🚧 |
