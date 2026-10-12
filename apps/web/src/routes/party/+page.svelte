@@ -6,6 +6,8 @@
 	import { party } from '#lib/party.svelte.ts';
 	import { errorText, label } from '#lib/text.ts';
 
+	const COOLDOWN_CHOICES = [null, 15_000, 30_000, 60_000, 120_000, 300_000];
+
 	let input = $state('');
 	/** Queue length when the last add was sent; the add is done once it changes or an error arrives. */
 	let addingSince = $state<number | null>(null);
@@ -20,6 +22,20 @@
 	const skip = $derived(ask({ type: 'skip' }));
 	const voted = $derived(skip?.kind === 'deny' && skip.reason === 'already-voted');
 	const tally = $derived(ctx && np ? { have: np.skipVotes.length, needed: skipVotesNeeded(ctx) } : null);
+
+	/** Ticks once a second while a cooldown is set, so the wait counts down. */
+	let clock = $state(Date.now());
+	$effect(() => {
+		if (!s?.settings.addCooldownMs) return;
+		const tick = setInterval(() => (clock = Date.now()), 1_000);
+		return () => clearInterval(tick);
+	});
+	const waitSeconds = $derived.by(() => {
+		const cooldown = s?.settings.addCooldownMs;
+		const last = party.me?.lastAddedAt;
+		if (!cooldown || last == null) return 0;
+		return Math.ceil(Math.min(cooldown, last + cooldown - (clock + party.clockOffset)) / 1000);
+	});
 
 	type Ask = { type: 'skip' } | { type: 'remove' | 'bump'; item: QueueItem };
 	/** What the active rules would answer if this guest tried it. The server has the last word. */
@@ -108,11 +124,13 @@
 			{#if !input && 'clipboard' in navigator}
 				<button type="button" onclick={paste}>{m.add_paste()}</button>
 			{:else}
-				<button class="primary" disabled={!input.trim()}>{m.add_action()}</button>
+				<button class="primary" disabled={!input.trim() || waitSeconds > 0}>{m.add_action()}</button>
 			{/if}
 		</form>
 		{#if adding}
 			<p class="dim" role="status">{m.adding()}</p>
+		{:else if waitSeconds > 0}
+			<p class="dim" role="status">{m.add_cooldown_wait({ seconds: waitSeconds })}</p>
 		{/if}
 
 		<section class="card">
@@ -167,6 +185,19 @@
 						/>
 					</label>
 				{/if}
+				<label>
+					<span class="dim">{m.add_cooldown()}</span>
+					<select
+						value={String(s.settings.addCooldownMs)}
+						onchange={(e) => party.send({ t: 'settings', patch: { addCooldownMs: Number(e.currentTarget.value) || null } })}
+					>
+						{#each COOLDOWN_CHOICES as ms (ms)}
+							<option value={String(ms)}>
+								{ms === null ? m.add_cooldown_off() : ms < 60_000 ? m.seconds({ n: ms / 1000 }) : m.minutes({ n: ms / 60_000 })}
+							</option>
+						{/each}
+					</select>
+				</label>
 				<label class="row">
 					<input
 						type="checkbox"

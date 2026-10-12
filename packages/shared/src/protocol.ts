@@ -34,7 +34,8 @@ export type ErrorCode =
 	| 'collection'
 	| 'matching-unavailable'
 	| 'too-long'
-	| 'queue-limit';
+	| 'queue-limit'
+	| 'cooldown';
 
 export type ServerMessage =
 	| { t: 'welcome'; you: GuestId; state: PartyState }

@@ -17,7 +17,8 @@ const guest = (id: string, role: Guest['role'] = 'guest', connected = true): Gue
 	nickname: id,
 	role,
 	connected,
-	joinedAt: 0
+	joinedAt: 0,
+	lastAddedAt: null
 });
 const ctx = (guests: Guest[], skipVotes: string[] = [], skipThreshold = 0.5): PartyContext => ({
 	guests,
