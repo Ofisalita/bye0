@@ -169,6 +169,7 @@ export class Party {
 		}
 		this.guests.delete(guestId);
 		this.queue = this.queue.filter((i) => i.addedBy !== guestId);
+		for (const item of this.queue) delete item.upvotes[guestId];
 		const conns = [...this.conns].filter(([, id]) => id === guestId).map(([c]) => c);
 		for (const c of conns) this.disconnect(c);
 		return conns;
@@ -269,6 +270,7 @@ export class Party {
 			durationMs: track.durationMs,
 			candidates: track.candidates,
 			candidateIndex: 0,
+			upvotes: {},
 			confirmBy: track.needsConfirmation && track.candidates.length > 1 ? now + CONFIRM_MS : undefined
 		});
 		guest.lastAddedAt = now;
@@ -302,6 +304,17 @@ export class Party {
 		const res = this.resolve({ type: 'bump', by, item }, now);
 		if (res.kind !== 'apply') return 'not-allowed';
 		item.bumpedAt = now;
+		return null;
+	}
+
+	/** Gives a queued song `by`'s upvote, or takes it back. Nobody upvotes their own. */
+	upvote(by: GuestId, itemId: string, now: number): Result {
+		const item = this.queue.find((i) => i.id === itemId);
+		if (!item) return 'bad-request';
+		if (!this.guests.has(by) || item.addedBy === by) return 'not-allowed';
+		if (Object.hasOwn(item.upvotes, by)) delete item.upvotes[by];
+		else item.upvotes[by] = now;
+		this.lastActivity = now;
 		return null;
 	}
 

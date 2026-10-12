@@ -32,6 +32,9 @@ you can change the rules mid-party. "who decides" has four settings:
   without asking.
 - **Anarchy**: anyone skips, removes or moves any song to the front, no vote needed.
 
+"queue order" can also go by votes: **Most voted first** plays the songs with the most ▲, and **Hot** does
+the same but lets old votes fade (a vote is worth half after ten minutes), so recent favourites win.
+
 whatever the rules, you can kick people, and make a friend co-host so their device can take over the music
 if yours dies.
 
@@ -43,6 +46,8 @@ on a wide screen, **Bigger queue** shrinks the video and gives the room to the l
 1. scan the QR code (or open bye0 and type the code), then pick a nickname.
 2. paste a song link and hit **Add**.
 3. watch the queue, vote to skip, take back your own songs if you change your mind.
+4. if the host set the queue to go by votes, tap **▲** on the songs you want to hear sooner. tap it again
+   to take your vote back.
 
 you can also send songs straight from your music app, once you've joined:
 

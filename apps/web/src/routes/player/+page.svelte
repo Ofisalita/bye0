@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import QRCode from 'qrcode';
+	import { ORDERINGS, type QueueItem } from '@bye0/shared';
 	import { m } from '#lib/paraglide/messages.js';
 	import { PartyClient } from '#lib/party.svelte.ts';
 	import { loadYouTube } from '#lib/youtube.ts';
@@ -26,6 +27,8 @@
 
 	const s = $derived(party.state);
 	const np = $derived(s?.nowPlaying ?? null);
+	const showUpvotes = $derived(s ? ORDERINGS[s.settings.ordering]?.usesUpvotes : false);
+	const upvotes = (item: QueueItem) => Object.keys(item.upvotes).length;
 	const allowed = $derived(party.me !== undefined && party.me.role !== 'guest');
 	// Another device may take over; then this one goes back to the start button.
 	const active = $derived(tapped && s?.playerId === party.you);
@@ -151,7 +154,10 @@
 		<section class="next">
 			<h2>{m.up_next()}</h2>
 			{#each s.queue as item (item.id)}
-				<p class="ellipsis">{item.title} <span class="dim">{item.artists.join(', ')}</span></p>
+				<p class="ellipsis">
+					{item.title}
+					<span class="dim">{item.artists.join(', ')}{showUpvotes && upvotes(item) ? ` · ▲ ${upvotes(item)}` : ''}</span>
+				</p>
 			{:else}
 				<p class="dim">{m.queue_empty()}</p>
 			{/each}
