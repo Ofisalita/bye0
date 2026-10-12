@@ -1,0 +1,22 @@
+{
+	servers {
+		# Coolify's proxy sits in front of this one. Trusting it keeps the guest's address in
+		# X-Forwarded-For, which the party server rate-limits joins by.
+		trusted_proxies static private_ranges
+	}
+}
+
+:80 {
+	encode zstd gzip
+
+	handle /ws {
+		reverse_proxy server:3001
+	}
+
+	# Client-only app: every route is served from the fallback page.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
