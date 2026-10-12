@@ -4,6 +4,7 @@
 	import {
 		CONFIRM_MS,
 		GOVERNANCES,
+		isLocked,
 		ORDERINGS,
 		skipVotesNeeded,
 		type PartyContext,
@@ -13,6 +14,7 @@
 	} from '@bye0/shared';
 	import CandidatePicker from '#lib/CandidatePicker.svelte';
 	import { m } from '#lib/paraglide/messages.js';
+	import { getLocale } from '#lib/paraglide/runtime.js';
 	import { party } from '#lib/party.svelte.ts';
 	import { errorText, label } from '#lib/text.ts';
 
@@ -20,7 +22,8 @@
 	const MAX_DURATION_CHOICES = [null, 5, 7, 10, 15, 20, 30].map((min) => min && min * 60_000);
 	const MAX_QUEUED_CHOICES = [null, 1, 2, 3, 5, 10];
 	const COOLDOWN_CHOICES = [null, 15_000, 30_000, 60_000, 120_000, 300_000];
-	type Limit = 'maxDurationMs' | 'maxQueuedPerGuest' | 'addCooldownMs';
+	const AUTO_LOCK_CHOICES = [null, 15, 30, 60, 120, 180].map((min) => min && min * 60_000);
+	type Limit = 'maxDurationMs' | 'maxQueuedPerGuest' | 'addCooldownMs' | 'autoLockMs';
 	const setLimit = (key: Limit, value: string) =>
 		party.send({ t: 'settings', patch: { [key]: Number(value) || null } as Partial<PartySettings> });
 	const span = (ms: number) =>
@@ -67,6 +70,18 @@
 	const confirmSeconds = $derived(
 		confirming?.confirmBy ? Math.ceil(Math.min(CONFIRM_MS, confirming.confirmBy - serverNow) / 1000) : 0
 	);
+	const locked = $derived(s ? isLocked(s.settings, s.createdAt, serverNow) : false);
+	/** When the auto-lock kicks in, on this device's clock; null if it's off or already happened. */
+	const locksAt = $derived(
+		s?.settings.autoLockMs && !locked ? new Date(s.createdAt + s.settings.autoLockMs - party.clockOffset) : null
+	);
+
+	function setLocked(on: boolean) {
+		// Unlocking after an auto-lock also turns the auto-lock off, or it would lock again at once.
+		const autoLocked = !s?.settings.locked && locked;
+		party.send({ t: 'settings', patch: on ? { locked: true } : { locked: false, ...(autoLocked && { autoLockMs: null }) } });
+	}
+
 	/** Item whose versions the host has open. */
 	let picking = $state<string | null>(null);
 	const canPick = (item: QueueItem) => party.isHost && item.candidates.length > 1;
@@ -315,6 +330,14 @@
 					/>
 					{m.approve_joins()}
 				</label>
+				<label class="row">
+					<input type="checkbox" checked={locked} onchange={(e) => setLocked(e.currentTarget.checked)} />
+					{m.lock_party()}
+				</label>
+				{@render limitSelect(m.auto_lock(), 'autoLockMs', AUTO_LOCK_CHOICES, span, m.auto_lock_off())}
+				{#if locksAt}
+					<p class="dim">{m.locks_at({ time: locksAt.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' }) })}</p>
+				{/if}
 			</section>
 		{/if}
 

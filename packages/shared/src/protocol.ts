@@ -39,7 +39,8 @@ export type ErrorCode =
 	| 'matching-unavailable'
 	| 'too-long'
 	| 'queue-limit'
-	| 'cooldown';
+	| 'cooldown'
+	| 'locked';
 
 export type ServerMessage =
 	| { t: 'welcome'; you: GuestId; state: PartyState }

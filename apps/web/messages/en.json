@@ -53,6 +53,10 @@
 	"prefer_audio": "Play the audio version of pasted music videos",
 	"who_can_join": "Who can join",
 	"approve_joins": "Let in each new guest yourself",
+	"lock_party": "Lock the party (no new guests)",
+	"auto_lock": "Lock it automatically after",
+	"auto_lock_off": "Never",
+	"locks_at": "Locks at {time}.",
 	"lobby_title": "Waiting to join",
 	"let_in": "Let in",
 	"turn_away": "Turn away",
@@ -99,5 +103,6 @@
 	"error_matching_unavailable": "Can't look that song up right now. Paste a YouTube link instead.",
 	"error_too_long": "That one is too long for this party.",
 	"error_queue_limit": "You have enough songs queued. Wait for one to play.",
-	"error_cooldown": "Wait a little before adding another song."
+	"error_cooldown": "Wait a little before adding another song.",
+	"error_locked": "This party isn't taking new guests."
 }

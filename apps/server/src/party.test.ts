@@ -231,6 +231,25 @@ describe('Party', () => {
 		expect(party.isPending(g.id)).toBe(false);
 	});
 
+	test('lock: no new guests, but anyone already in can come back', () => {
+		const { party, host } = setup();
+		expect(party.patchSettings({ locked: true }, host)).toBeNull();
+		expect(party.join('cata', 'cata', 1)).toBe('locked');
+		expect(party.join('ana', 'ana', 1)).toMatchObject({ nickname: 'ana' });
+		party.patchSettings({ locked: false }, host);
+		expect(party.join('cata', 'cata', 2)).toMatchObject({ nickname: 'cata' });
+	});
+
+	test('auto-lock counts from when the party was created', () => {
+		const { party, host } = setup({ autoLockMs: 60_000 }); // created at 0
+		expect(party.join('cata', 'cata', 59_999)).toMatchObject({ nickname: 'cata' });
+		expect(party.join('dani', 'dani', 60_000)).toBe('locked');
+		expect(party.state(60_000).createdAt).toBe(0);
+		party.patchSettings({ autoLockMs: null }, host);
+		expect(party.join('dani', 'dani', 60_001)).toMatchObject({ nickname: 'dani' });
+		expect(party.patchSettings({ autoLockMs: 0 }, host)).toBe('bad-request');
+	});
+
 	test('kick bans the device and drops its songs', () => {
 		const { party, host, ana } = setup();
 		party.add(ana, track('a1'), 1);

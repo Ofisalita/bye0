@@ -15,7 +15,8 @@ const ERRORS: Record<ErrorCode, () => string> = {
 	'matching-unavailable': m.error_matching_unavailable,
 	'too-long': m.error_too_long,
 	'queue-limit': m.error_queue_limit,
-	cooldown: m.error_cooldown
+	cooldown: m.error_cooldown,
+	locked: m.error_locked
 };
 export const errorText = (code: ErrorCode) => ERRORS[code]();
 

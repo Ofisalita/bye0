@@ -53,6 +53,10 @@
 	"prefer_audio": "Usar la versión de audio de los videoclips pegados",
 	"who_can_join": "Quién puede entrar",
 	"approve_joins": "Dejar entrar a cada invitado nuevo a mano",
+	"lock_party": "Cerrar la fiesta (sin invitados nuevos)",
+	"auto_lock": "Cerrarla automáticamente después de",
+	"auto_lock_off": "Nunca",
+	"locks_at": "Se cierra a las {time}.",
 	"lobby_title": "Esperando para entrar",
 	"let_in": "Dejar entrar",
 	"turn_away": "Rechazar",
@@ -99,5 +103,6 @@
 	"error_matching_unavailable": "No podemos buscar esa canción ahora. Pega un enlace de YouTube.",
 	"error_too_long": "Esa es demasiado larga para esta fiesta.",
 	"error_queue_limit": "Ya tienes suficientes canciones en cola. Espera a que suene una.",
-	"error_cooldown": "Espera un poco antes de agregar otra canción."
+	"error_cooldown": "Espera un poco antes de agregar otra canción.",
+	"error_locked": "Esta fiesta no está aceptando invitados nuevos."
 }

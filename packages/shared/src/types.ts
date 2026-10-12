@@ -67,6 +67,10 @@ export interface PartySettings {
 	preferAudio: boolean;
 	/** New guests wait in a lobby until the host lets them in. */
 	approveJoins: boolean;
+	/** No new guests; anyone already in can still come back. */
+	locked: boolean;
+	/** Locks the party this long after it was created. */
+	autoLockMs: number | null;
 }
 
 /** What strategies get to look at. */
@@ -83,6 +87,7 @@ export interface PartyContext {
 export interface PartyState {
 	id: string;
 	code: string;
+	createdAt: number;
 	started: boolean;
 	guests: Guest[];
 	/** Already in play order. */
@@ -103,8 +108,14 @@ export const DEFAULT_SETTINGS: PartySettings = {
 	maxQueuedPerGuest: null,
 	addCooldownMs: null,
 	preferAudio: false,
-	approveJoins: false
+	approveJoins: false,
+	locked: false,
+	autoLockMs: null
 };
+
+/** Whether new guests are kept out: locked by hand, or the auto-lock time has come. */
+export const isLocked = (settings: PartySettings, createdAt: number, now: number): boolean =>
+	settings.locked || (settings.autoLockMs !== null && now - createdAt >= settings.autoLockMs);
 
 export interface Preset {
 	id: string;

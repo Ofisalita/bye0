@@ -3,6 +3,7 @@ import {
 	CONFIRM_MS,
 	DEFAULT_SETTINGS,
 	GOVERNANCES,
+	isLocked,
 	NICKNAME_MAX,
 	ORDERINGS,
 	type Candidate,
@@ -41,6 +42,7 @@ export class Party {
 	previousCode: string | null = null;
 	codeRotatedAt = 0;
 	lastActivity: number;
+	readonly createdAt: number;
 
 	started = false;
 	settings: PartySettings;
@@ -57,6 +59,7 @@ export class Party {
 
 	constructor(now: number, settings: Partial<PartySettings> = {}) {
 		this.lastActivity = now;
+		this.createdAt = now;
 		this.settings = { ...DEFAULT_SETTINGS };
 		this.patchSettings(settings);
 	}
@@ -87,6 +90,7 @@ export class Party {
 		return {
 			id: this.id,
 			code: this.code,
+			createdAt: this.createdAt,
 			started: this.started,
 			guests: [...this.guests.values()],
 			queue: this.orderedQueue(now),
@@ -113,6 +117,7 @@ export class Party {
 			existing.nickname = name;
 			return existing;
 		}
+		if (role !== 'host' && isLocked(this.settings, this.createdAt, now)) return 'locked';
 		const guest: Guest = {
 			id: crypto.randomUUID(),
 			nickname: name,
@@ -192,6 +197,8 @@ export class Party {
 			typeof next.showAttribution !== 'boolean' ||
 			typeof next.preferAudio !== 'boolean' ||
 			typeof next.approveJoins !== 'boolean' ||
+			typeof next.locked !== 'boolean' ||
+			!posOrNull(next.autoLockMs) ||
 			!posOrNull(next.maxDurationMs) ||
 			!posOrNull(next.maxQueuedPerGuest) ||
 			!posOrNull(next.addCooldownMs)
@@ -207,7 +214,9 @@ export class Party {
 			maxQueuedPerGuest: next.maxQueuedPerGuest,
 			addCooldownMs: next.addCooldownMs,
 			preferAudio: next.preferAudio,
-			approveJoins: next.approveJoins
+			approveJoins: next.approveJoins,
+			locked: next.locked,
+			autoLockMs: next.autoLockMs
 		};
 		// Nobody is left waiting for an approval that is no longer asked for.
 		if (!this.settings.approveJoins) for (const g of this.guests.values()) delete g.pending;
