@@ -68,6 +68,8 @@
 	"player_layout_video": "Video más grande",
 	"back_to_party": "Volver a la cola",
 	"language": "Idioma",
+	"share_no_party": "Primero únete a una fiesta y vuelve a compartir la canción.",
+	"share_no_link": "Lo que compartiste no traía el enlace de una canción.",
 	"error_bad_request": "Eso no funcionó. Intenta de nuevo.",
 	"error_bad_code": "Ese código no es válido. Revisa el código actual en la pantalla.",
 	"error_party_gone": "Esa fiesta ya no existe.",

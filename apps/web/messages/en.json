@@ -68,6 +68,8 @@
 	"player_layout_video": "Bigger video",
 	"back_to_party": "Back to the queue",
 	"language": "Language",
+	"share_no_party": "Join a party first, then share the song again.",
+	"share_no_link": "There was no song link in what you shared.",
 	"error_bad_request": "That didn't work. Try again.",
 	"error_bad_code": "That code isn't valid. Check the screen for the current one.",
 	"error_party_gone": "That party no longer exists.",
