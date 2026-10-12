@@ -7,6 +7,8 @@ export interface Guest {
 	role: Role;
 	connected: boolean;
 	joinedAt: number;
+	/** When one of this guest's songs last made it into the queue; drives the add cooldown. */
+	lastAddedAt: number | null;
 }
 
 /** A playable YouTube video, as returned by the matching service. */
@@ -51,6 +53,8 @@ export interface PartySettings {
 	showAttribution: boolean;
 	maxDurationMs: number | null;
 	maxQueuedPerGuest: number | null;
+	/** Minimum time between two songs from the same guest. */
+	addCooldownMs: number | null;
 }
 
 /** What strategies get to look at. */
@@ -84,7 +88,8 @@ export const DEFAULT_SETTINGS: PartySettings = {
 	skipThreshold: 0.5,
 	showAttribution: true,
 	maxDurationMs: 10 * 60_000,
-	maxQueuedPerGuest: null
+	maxQueuedPerGuest: null,
+	addCooldownMs: null
 };
 
 export interface Preset {

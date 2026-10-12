@@ -43,6 +43,11 @@
 	"governance_presidential_democracy": "Presidential democracy (the host can override)",
 	"skip_threshold": "Votes needed to skip: {percent}%",
 	"show_attribution": "Show who added each song",
+	"add_cooldown": "Time between one guest's songs",
+	"add_cooldown_off": "No wait",
+	"add_cooldown_wait": "You can add another song in {seconds} s.",
+	"seconds": "{n} s",
+	"minutes": "{n} min",
 	"guests": "Guests",
 	"role_host": "host",
 	"role_cohost": "co-host",
@@ -70,5 +75,6 @@
 	"error_collection": "Albums and playlists don't work yet. Paste a single song.",
 	"error_matching_unavailable": "Can't look that song up right now. Paste a YouTube link instead.",
 	"error_too_long": "That one is too long for this party.",
-	"error_queue_limit": "You have enough songs queued. Wait for one to play."
+	"error_queue_limit": "You have enough songs queued. Wait for one to play.",
+	"error_cooldown": "Wait a little before adding another song."
 }

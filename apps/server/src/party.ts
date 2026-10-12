@@ -106,7 +106,14 @@ export class Party {
 			existing.nickname = name;
 			return existing;
 		}
-		const guest: Guest = { id: crypto.randomUUID(), nickname: name, role, connected: false, joinedAt: now };
+		const guest: Guest = {
+			id: crypto.randomUUID(),
+			nickname: name,
+			role,
+			connected: false,
+			joinedAt: now,
+			lastAddedAt: null
+		};
 		this.guests.set(guest.id, guest);
 		this.tokens.set(token, guest.id);
 		return guest;
@@ -164,7 +171,8 @@ export class Party {
 			!(next.skipThreshold > 0 && next.skipThreshold <= 1) ||
 			typeof next.showAttribution !== 'boolean' ||
 			!posOrNull(next.maxDurationMs) ||
-			!posOrNull(next.maxQueuedPerGuest)
+			!posOrNull(next.maxQueuedPerGuest) ||
+			!posOrNull(next.addCooldownMs)
 		)
 			return 'bad-request';
 		// Copy field by field so unknown keys in a client's patch are dropped.
@@ -174,7 +182,8 @@ export class Party {
 			skipThreshold: next.skipThreshold,
 			showAttribution: next.showAttribution,
 			maxDurationMs: next.maxDurationMs,
-			maxQueuedPerGuest: next.maxQueuedPerGuest
+			maxQueuedPerGuest: next.maxQueuedPerGuest,
+			addCooldownMs: next.addCooldownMs
 		};
 		return null;
 	}
@@ -189,15 +198,19 @@ export class Party {
 	}
 
 	/** Cheap check to run before spending a matching-service call. */
-	canAdd(by: GuestId): Result {
+	canAdd(by: GuestId, now: number): Result {
+		const cooldown = this.settings.addCooldownMs;
+		const last = this.guests.get(by)?.lastAddedAt ?? null;
+		if (cooldown !== null && last !== null && now - last < cooldown) return 'cooldown';
 		const max = this.settings.maxQueuedPerGuest;
 		if (max !== null && this.queue.filter((i) => i.addedBy === by).length >= max) return 'queue-limit';
 		return null;
 	}
 
 	add(by: GuestId, track: ResolvedTrack, now: number): Result {
-		if (!this.guests.has(by)) return 'not-allowed';
-		const limited = this.canAdd(by);
+		const guest = this.guests.get(by);
+		if (!guest) return 'not-allowed';
+		const limited = this.canAdd(by, now);
 		if (limited) return limited;
 		if (!track.candidates.length) return 'unresolvable';
 		const max = this.settings.maxDurationMs;
@@ -212,6 +225,7 @@ export class Party {
 			candidates: track.candidates,
 			candidateIndex: 0
 		});
+		guest.lastAddedAt = now;
 		this.lastActivity = now;
 		if (this.started && !this.nowPlaying) this.advance(now);
 		return null;
