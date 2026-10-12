@@ -57,6 +57,8 @@
 	"auto_lock": "Lock it automatically after",
 	"auto_lock_off": "Never",
 	"locks_at": "Locks at {time}.",
+	"same_network": "Only guests on my Wi-Fi",
+	"same_network_hint": "New guests on mobile data or a VPN won't get in, and now and then someone on your Wi-Fi might not either.",
 	"lobby_title": "Waiting to join",
 	"let_in": "Let in",
 	"turn_away": "Turn away",
@@ -104,5 +106,6 @@
 	"error_too_long": "That one is too long for this party.",
 	"error_queue_limit": "You have enough songs queued. Wait for one to play.",
 	"error_cooldown": "Wait a little before adding another song.",
-	"error_locked": "This party isn't taking new guests."
+	"error_locked": "This party isn't taking new guests.",
+	"error_other_network": "Connect to the host's Wi-Fi to join this party."
 }

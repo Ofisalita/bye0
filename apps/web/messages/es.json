@@ -57,6 +57,8 @@
 	"auto_lock": "Cerrarla automáticamente después de",
 	"auto_lock_off": "Nunca",
 	"locks_at": "Se cierra a las {time}.",
+	"same_network": "Solo invitados en mi Wi-Fi",
+	"same_network_hint": "Los invitados nuevos con datos móviles o VPN no podrán entrar, y de vez en cuando alguien en tu Wi-Fi tampoco.",
 	"lobby_title": "Esperando para entrar",
 	"let_in": "Dejar entrar",
 	"turn_away": "Rechazar",
@@ -104,5 +106,6 @@
 	"error_too_long": "Esa es demasiado larga para esta fiesta.",
 	"error_queue_limit": "Ya tienes suficientes canciones en cola. Espera a que suene una.",
 	"error_cooldown": "Espera un poco antes de agregar otra canción.",
-	"error_locked": "Esta fiesta no está aceptando invitados nuevos."
+	"error_locked": "Esta fiesta no está aceptando invitados nuevos.",
+	"error_other_network": "Conéctate al Wi-Fi del anfitrión para entrar a esta fiesta."
 }

@@ -44,7 +44,7 @@ function endParty(party: Party) {
 function enter(ws: Socket, party: Party, guestId: string) {
 	ws.data.partyId = party.id;
 	ws.data.guestId = guestId;
-	party.connect(ws.data.id, guestId, Date.now());
+	party.connect(ws.data.id, guestId, Date.now(), ws.data.ip);
 	ws.subscribe(topic(party));
 	send(ws, { t: 'welcome', you: guestId, state: party.state(Date.now()) });
 	broadcast(party);
@@ -65,7 +65,7 @@ function handleEntry(ws: Socket, msg: ClientMessage) {
 		case 'join': {
 			const party = registry.join(String(msg.code), ws.data.ip, now);
 			if (typeof party === 'string') return fail(ws, party);
-			const guest = party.join(msg.token, msg.nickname, now);
+			const guest = party.join(msg.token, msg.nickname, now, 'guest', ws.data.ip);
 			if (typeof guest === 'string') return fail(ws, guest);
 			return enter(ws, party, guest.id);
 		}

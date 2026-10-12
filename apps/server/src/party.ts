@@ -18,6 +18,7 @@ import {
 	type NowPlaying,
 	type Role
 } from '@bye0/shared';
+import { sameNetwork } from './network';
 
 export interface ResolvedTrack {
 	title: string;
@@ -56,6 +57,8 @@ export class Party {
 	private conns = new Map<string, GuestId>();
 	private playerConn: string | null = null;
 	private lastPlayedAt: Record<GuestId, number> = {};
+	/** Every address the host has connected from: the networks "same network" lets in. */
+	private hostIps = new Set<string>();
 
 	constructor(now: number, settings: Partial<PartySettings> = {}) {
 		this.lastActivity = now;
@@ -108,7 +111,8 @@ export class Party {
 
 	// --- membership ---
 
-	join(token: string, nickname: string, now: number, role: Role = 'guest'): Guest | ErrorCode {
+	/** `ip` is the device's public address, for the same-network check. */
+	join(token: string, nickname: string, now: number, role: Role = 'guest', ip = ''): Guest | ErrorCode {
 		if (this.banned.has(token)) return 'banned';
 		const name = nickname.trim().slice(0, NICKNAME_MAX);
 		if (!name || !token) return 'bad-request';
@@ -118,6 +122,8 @@ export class Party {
 			return existing;
 		}
 		if (role !== 'host' && isLocked(this.settings, this.createdAt, now)) return 'locked';
+		if (role !== 'host' && this.settings.sameNetwork && ![...this.hostIps].some((h) => sameNetwork(ip, h)))
+			return 'other-network';
 		const guest: Guest = {
 			id: crypto.randomUUID(),
 			nickname: name,
@@ -132,9 +138,11 @@ export class Party {
 		return guest;
 	}
 
-	connect(connId: string, guestId: GuestId, now: number): void {
+	connect(connId: string, guestId: GuestId, now: number, ip = ''): void {
 		this.conns.set(connId, guestId);
-		this.guests.get(guestId)!.connected = true;
+		const guest = this.guests.get(guestId)!;
+		guest.connected = true;
+		if (guest.role === 'host' && ip) this.hostIps.add(ip);
 		this.lastActivity = now;
 	}
 
@@ -198,6 +206,7 @@ export class Party {
 			typeof next.preferAudio !== 'boolean' ||
 			typeof next.approveJoins !== 'boolean' ||
 			typeof next.locked !== 'boolean' ||
+			typeof next.sameNetwork !== 'boolean' ||
 			!posOrNull(next.autoLockMs) ||
 			!posOrNull(next.maxDurationMs) ||
 			!posOrNull(next.maxQueuedPerGuest) ||
@@ -216,7 +225,8 @@ export class Party {
 			preferAudio: next.preferAudio,
 			approveJoins: next.approveJoins,
 			locked: next.locked,
-			autoLockMs: next.autoLockMs
+			autoLockMs: next.autoLockMs,
+			sameNetwork: next.sameNetwork
 		};
 		// Nobody is left waiting for an approval that is no longer asked for.
 		if (!this.settings.approveJoins) for (const g of this.guests.values()) delete g.pending;

@@ -40,7 +40,8 @@ export type ErrorCode =
 	| 'too-long'
 	| 'queue-limit'
 	| 'cooldown'
-	| 'locked';
+	| 'locked'
+	| 'other-network';
 
 export type ServerMessage =
 	| { t: 'welcome'; you: GuestId; state: PartyState }

@@ -250,6 +250,19 @@ describe('Party', () => {
 		expect(party.patchSettings({ autoLockMs: 0 }, host)).toBe('bad-request');
 	});
 
+	test('same network: newcomers must share a network the host connected from', () => {
+		const { party, host } = setup();
+		party.patchSettings({ sameNetwork: true }, host);
+		party.connect('conn-host-wifi', host, 1, '203.0.113.7');
+		party.connect('conn-host-v6', host, 1, '2001:db8:1:2::9');
+		expect(party.join('cata', 'cata', 2, 'guest', '203.0.113.7')).toMatchObject({ nickname: 'cata' });
+		expect(party.join('dani', 'dani', 2, 'guest', '2001:db8:1:2::42')).toMatchObject({ nickname: 'dani' });
+		expect(party.join('eli', 'eli', 2, 'guest', '198.51.100.1')).toBe('other-network');
+		expect(party.join('ana', 'ana', 2, 'guest', '198.51.100.1')).toMatchObject({ nickname: 'ana' }); // already in
+		party.patchSettings({ sameNetwork: false }, host);
+		expect(party.join('eli', 'eli', 3, 'guest', '198.51.100.1')).toMatchObject({ nickname: 'eli' });
+	});
+
 	test('kick bans the device and drops its songs', () => {
 		const { party, host, ana } = setup();
 		party.add(ana, track('a1'), 1);

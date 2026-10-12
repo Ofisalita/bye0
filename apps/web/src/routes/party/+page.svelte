@@ -338,6 +338,17 @@
 				{#if locksAt}
 					<p class="dim">{m.locks_at({ time: locksAt.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' }) })}</p>
 				{/if}
+				<label class="row">
+					<input
+						type="checkbox"
+						checked={s.settings.sameNetwork}
+						onchange={(e) => party.send({ t: 'settings', patch: { sameNetwork: e.currentTarget.checked } })}
+					/>
+					{m.same_network()}
+				</label>
+				{#if s.settings.sameNetwork}
+					<p class="dim">{m.same_network_hint()}</p>
+				{/if}
 			</section>
 		{/if}
 

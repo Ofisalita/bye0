@@ -71,6 +71,8 @@ export interface PartySettings {
 	locked: boolean;
 	/** Locks the party this long after it was created. */
 	autoLockMs: number | null;
+	/** New guests must come from the host's network (same public IPv4, or IPv6 /64). */
+	sameNetwork: boolean;
 }
 
 /** What strategies get to look at. */
@@ -110,7 +112,8 @@ export const DEFAULT_SETTINGS: PartySettings = {
 	preferAudio: false,
 	approveJoins: false,
 	locked: false,
-	autoLockMs: null
+	autoLockMs: null,
+	sameNetwork: false
 };
 
 /** Whether new guests are kept out: locked by hand, or the auto-lock time has come. */
