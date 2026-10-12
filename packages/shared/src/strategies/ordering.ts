@@ -8,6 +8,22 @@ export const fifo: OrderingStrategy = {
 	order: (queue) => [...queue].sort(byAddedAt)
 };
 
+/** FNV-1a. Any even spread of ids would do. */
+function hash(text: string): number {
+	let h = 0x811c9dc5;
+	for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+	return h >>> 0;
+}
+
+/**
+ * Random, but the same on every call and on every device: a song's place comes from its id.
+ * So the queue doesn't reshuffle with each broadcast, and a new song can land anywhere in it.
+ */
+export const shuffle: OrderingStrategy = {
+	id: 'shuffle',
+	order: (queue) => [...queue].sort((a, b) => hash(a.id) - hash(b.id) || byAddedAt(a, b))
+};
+
 /**
  * Everyone's 1st song, then everyone's 2nd, … Within a round, whoever has waited
  * longest since their last song goes first.

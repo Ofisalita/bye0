@@ -19,16 +19,18 @@ bye0 is a web page. nobody installs anything and nobody needs an account.
    - **Chill dinner**: songs play in the order they were added, and only you can skip.
    - **House party**: everyone takes turns, and skips are decided by vote. your vote counts the same as
      everyone else's.
+   - **Chaos**: songs play in a random order, and anyone can skip, remove or move any song to the front.
 2. tap **Play on this device** and then **Start playing here** on whatever is plugged into the speakers
    (your phone, a laptop, a TV browser).
 3. guests scan the QR code on that screen, or type the 4-letter code.
 
-you can change the rules mid-party. "who decides" has three settings:
+you can change the rules mid-party. "who decides" has four settings:
 
 - **Host only**: you skip, remove and reorder songs. guests can only take back their own.
 - **Full democracy**: skips need enough votes, and you're just one more voter.
 - **Presidential democracy**: guests vote to skip, but you can skip, remove or move any song to the front
   without asking.
+- **Anarchy**: anyone skips, removes or moves any song to the front, no vote needed.
 
 whatever the rules, you can kick people, and make a friend co-host so their device can take over the music
 if yours dies.

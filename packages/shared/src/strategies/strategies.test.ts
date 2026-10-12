@@ -33,7 +33,7 @@ test('lookups ignore names every object inherits', () => {
 		expect(ORDERINGS[id]).toBeUndefined();
 		expect(GOVERNANCES[id]).toBeUndefined();
 	}
-	expect(Object.keys(ORDERINGS)).toEqual(['round-robin', 'fifo']);
+	expect(Object.keys(ORDERINGS)).toEqual(['round-robin', 'fifo', 'shuffle']);
 });
 
 describe('ordering', () => {
@@ -50,6 +50,15 @@ describe('ordering', () => {
 	test('round-robin: whoever just played waits for the others', () => {
 		const c = { ...ctx([]), lastPlayedAt: { a: 10, b: 5 } };
 		expect(ids(ORDERINGS['round-robin']!.order(queue, c))).toEqual(['c1', 'b1', 'a1', 'b2', 'a2', 'a3']);
+	});
+
+	test('shuffle: out of add order, yet the same every time and unmoved by new songs', () => {
+		const shuffled = ids(ORDERINGS.shuffle!.order(queue, ctx([])));
+		expect([...shuffled].sort()).toEqual(ids(queue).sort());
+		expect(shuffled).not.toEqual(ids(queue));
+		expect(ids(ORDERINGS.shuffle!.order([...queue].reverse(), ctx([])))).toEqual(shuffled);
+		const more = ids(ORDERINGS.shuffle!.order([...queue, item('d1', 'd', 7), item('d2', 'd', 8)], ctx([])));
+		expect(more.filter((id) => !id.startsWith('d'))).toEqual(shuffled);
 	});
 });
 
@@ -84,6 +93,13 @@ describe('governance', () => {
 		expect(g.handle({ type: 'remove', by: 'h', item: item('x', 'a', 0) }, ctx(guests)).kind).toBe('deny');
 		expect(g.handle({ type: 'remove', by: 'h', item: item('x', 'h', 0) }, ctx(guests)).kind).toBe('apply');
 		expect(g.handle({ type: 'bump', by: 'h', item: item('x', 'h', 0) }, ctx(guests)).kind).toBe('deny');
+	});
+
+	test('anarchy: anyone does anything, no vote', () => {
+		const g = GOVERNANCES.anarchy!;
+		expect(g.handle({ type: 'skip', by: 'a' }, ctx(guests, [], 1)).kind).toBe('apply');
+		expect(g.handle({ type: 'remove', by: 'a', item: item('x', 'b', 0) }, ctx(guests)).kind).toBe('apply');
+		expect(g.handle({ type: 'bump', by: 'a', item: item('x', 'a', 0) }, ctx(guests)).kind).toBe('apply');
 	});
 
 	test('presidential democracy: the host overrides', () => {

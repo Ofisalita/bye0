@@ -52,3 +52,9 @@ export const presidentialDemocracy: GovernanceMode = {
 	votesToSkip: true,
 	handle: (intent, ctx) => (isHost(intent.by, ctx) ? APPLY : byVote(intent, ctx))
 };
+
+/** No rules: anyone skips, removes or bumps any song, right away. */
+export const anarchy: GovernanceMode = {
+	id: 'anarchy',
+	handle: () => APPLY
+};

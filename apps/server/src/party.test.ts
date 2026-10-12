@@ -100,6 +100,18 @@ describe('Party', () => {
 		expect(party.state(4).queue.map((i) => i.title)).toEqual(['b1', 'a1']);
 	});
 
+	test('anarchy: a guest skips at once and removes or bumps anyone\'s song', () => {
+		const { party, host, ana, beto } = setup({ governance: 'anarchy', ordering: 'fifo' });
+		party.start(host, 0);
+		for (const [i, title] of ['h1', 'h2', 'h3', 'h4'].entries()) party.add(host, track(title), i);
+		expect(party.skip(ana, 5)).toBeNull();
+		expect(party.nowPlaying?.item.title).toBe('h2');
+		const [h3, h4] = party.state(6).queue;
+		expect(party.remove(beto, h3!.id, 6)).toBeNull();
+		expect(party.bump(ana, h4!.id, 6)).toBeNull();
+		expect(party.state(7).queue.map((i) => i.title)).toEqual(['h4']);
+	});
+
 	test('player errors fall through candidates, then skip', () => {
 		const { party, host, ana } = setup();
 		party.start(host, 0);

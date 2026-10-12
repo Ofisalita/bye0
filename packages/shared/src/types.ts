@@ -95,5 +95,6 @@ export interface Preset {
 // Only presets whose strategies exist are listed; SPEC §4 has the full set.
 export const PRESETS: Preset[] = [
 	{ id: 'chill-dinner', settings: { ordering: 'fifo', governance: 'dictatorship' } },
-	{ id: 'house-party', settings: { ordering: 'round-robin', governance: 'full-democracy' } }
+	{ id: 'house-party', settings: { ordering: 'round-robin', governance: 'full-democracy' } },
+	{ id: 'chaos', settings: { ordering: 'shuffle', governance: 'anarchy' } }
 ];
