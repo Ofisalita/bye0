@@ -486,7 +486,9 @@ export class Party {
 	claimPlayer(connId: string, takeOver = true): Result {
 		const guestId = this.conns.get(connId);
 		if (!guestId || this.is(guestId, 'guest')) return 'not-allowed';
-		if (!takeOver && this.playerConn) return 'not-allowed';
+		// The role may still be on this guest's previous connection: a phone that changed networks
+		// reconnects long before the server notices the old socket died. That isn't someone else.
+		if (!takeOver && this.playerConn && this.conns.get(this.playerConn) !== guestId) return 'not-allowed';
 		this.playerConn = connId;
 		return null;
 	}
