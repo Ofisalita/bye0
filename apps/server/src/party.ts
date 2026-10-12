@@ -34,11 +34,34 @@ export interface ResolvedTrack {
 type Result = ErrorCode | null;
 
 /**
+ * Everything about a party that should survive a server restart, as plain JSON.
+ * Connections don't: clients reconnect and resume, and the player claims its role again.
+ */
+export interface PartySnapshot {
+	v: 1;
+	id: string;
+	createdAt: number;
+	code: string;
+	previousCode: string | null;
+	codeRotatedAt: number;
+	lastActivity: number;
+	started: boolean;
+	settings: PartySettings;
+	nowPlaying: NowPlaying | null;
+	guests: Guest[];
+	tokens: [string, GuestId][];
+	banned: string[];
+	queue: QueueItem[];
+	lastPlayedAt: Record<GuestId, number>;
+	hostIps: string[];
+}
+
+/**
  * Authoritative state of one party. No I/O in here: the caller passes `now`,
  * and broadcasts `state()` after any call that returns without an error.
  */
 export class Party {
-	readonly id = crypto.randomUUID();
+	readonly id: string;
 	code = '';
 	previousCode: string | null = null;
 	codeRotatedAt = 0;
@@ -60,11 +83,54 @@ export class Party {
 	/** Every address the host has connected from: the networks "same network" lets in. */
 	private hostIps = new Set<string>();
 
-	constructor(now: number, settings: Partial<PartySettings> = {}) {
+	constructor(now: number, settings: Partial<PartySettings> = {}, id: string = crypto.randomUUID()) {
+		this.id = id;
 		this.lastActivity = now;
 		this.createdAt = now;
 		this.settings = { ...DEFAULT_SETTINGS };
 		this.patchSettings(settings);
+	}
+
+	// --- persistence ---
+
+	snapshot(): PartySnapshot {
+		return {
+			v: 1,
+			id: this.id,
+			createdAt: this.createdAt,
+			code: this.code,
+			previousCode: this.previousCode,
+			codeRotatedAt: this.codeRotatedAt,
+			lastActivity: this.lastActivity,
+			started: this.started,
+			settings: this.settings,
+			nowPlaying: this.nowPlaying,
+			guests: [...this.guests.values()],
+			tokens: [...this.tokens],
+			banned: [...this.banned],
+			queue: this.queue,
+			lastPlayedAt: this.lastPlayedAt,
+			hostIps: [...this.hostIps]
+		};
+	}
+
+	/** Settings go through validation, so a snapshot from an older version gets today's defaults. */
+	static restore(s: PartySnapshot): Party {
+		const party = new Party(s.createdAt, s.settings, s.id);
+		party.code = s.code;
+		party.previousCode = s.previousCode;
+		party.codeRotatedAt = s.codeRotatedAt;
+		party.lastActivity = s.lastActivity;
+		party.started = s.started;
+		party.nowPlaying = s.nowPlaying;
+		// Nobody is connected until their device reconnects.
+		party.guests = new Map(s.guests.map((g) => [g.id, { ...g, connected: false }]));
+		party.tokens = new Map(s.tokens);
+		party.banned = new Set(s.banned);
+		party.queue = s.queue;
+		party.lastPlayedAt = s.lastPlayedAt;
+		party.hostIps = new Set(s.hostIps);
+		return party;
 	}
 
 	// --- views ---
@@ -342,9 +408,11 @@ export class Party {
 
 	// --- player ---
 
-	claimPlayer(connId: string): Result {
+	/** `takeOver: false` only claims a free Player role: a player coming back after a dropped connection. */
+	claimPlayer(connId: string, takeOver = true): Result {
 		const guestId = this.conns.get(connId);
 		if (!guestId || this.is(guestId, 'guest')) return 'not-allowed';
+		if (!takeOver && this.playerConn) return 'not-allowed';
 		this.playerConn = connId;
 		return null;
 	}

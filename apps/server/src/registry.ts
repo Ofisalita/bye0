@@ -33,6 +33,13 @@ export class Registry {
 		return party;
 	}
 
+	/** Puts back a party from storage, codes included. */
+	restore(party: Party): void {
+		this.parties.set(party.id, party);
+		this.codes.set(party.code, party.id);
+		if (party.previousCode) this.codes.set(party.previousCode, party.id);
+	}
+
 	get(id: string): Party | undefined {
 		return this.parties.get(id);
 	}

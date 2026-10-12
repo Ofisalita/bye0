@@ -60,6 +60,9 @@
 		const item = party.state?.nowPlaying?.item;
 		if (!active || !player || !item || `${item.id}:${item.candidateIndex}` !== loaded) return;
 		const state = player.getPlayerState();
+		// The song may have ended while the connection was down and the first `player.ended` got lost.
+		// The server ignores repeats once it has moved on.
+		if (state === YT.PlayerState.ENDED) return party.send({ t: 'player.ended', itemId: item.id });
 		if (state !== YT.PlayerState.PLAYING && state !== YT.PlayerState.PAUSED) return;
 		party.send({
 			t: 'player.heartbeat',
@@ -92,6 +95,7 @@
 
 	async function start() {
 		tapped = true;
+		party.asPlayer = true;
 		party.send({ t: 'player.claim' });
 		if (party.isHost && !s?.started) party.send({ t: 'start' });
 		keepAwake();

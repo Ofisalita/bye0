@@ -8,6 +8,13 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      # For the party store's tests (apps/server/src/store.test.ts).
+      redis:
+        image: redis:8-alpine
+        ports: ['6379:6379']
+    env:
+      REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
