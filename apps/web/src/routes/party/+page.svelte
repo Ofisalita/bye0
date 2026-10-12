@@ -126,9 +126,10 @@
 		const text = input.trim();
 		if (!text) return;
 		if (!isLink) {
+			// Offline: keep what they typed for when the connection is back.
+			if (!party.send({ t: 'search', q: text })) return;
 			party.search = null;
 			searchingFor = text;
-			party.send({ t: 'search', q: text });
 			return;
 		}
 		// "youtu.be/…" pasted without its scheme still needs one to be a link.
@@ -136,7 +137,7 @@
 	}
 
 	function addSong(link: string) {
-		party.send({ t: 'add', input: link });
+		if (!party.send({ t: 'add', input: link })) return;
 		addingSince = queued;
 		input = '';
 		party.search = null;
@@ -175,15 +176,16 @@
 		<p role="status">{m.waiting_approval({ name: party.me.nickname })}</p>
 	</main>
 {:else}
-	<main class="page">
+	{@const offline = party.status === 'connecting'}
+	{#if offline}
+		<p class="toast offline" role="status">{m.reconnecting()}</p>
+	{/if}
+	<!-- Nothing here would reach the server while offline, so nothing responds until we're back. -->
+	<main class="page" inert={offline}>
 		<header class="row">
 			<h1 class="grow">bye0</h1>
 			<span class="code">{s.code}</span>
 		</header>
-
-		{#if party.status === 'connecting'}
-			<p class="dim" role="status">{m.reconnecting()}</p>
-		{/if}
 
 		{#if party.isHost && waiting.length}
 			<section class="card lobby">
@@ -474,6 +476,12 @@
 	}
 	input[type='range'] {
 		width: 100%;
+	}
+	.offline {
+		top: 16px;
+		bottom: auto;
+		background: var(--surface-2);
+		color: var(--text);
 	}
 	.result {
 		display: flex;

@@ -62,6 +62,8 @@ you can also send songs straight from your music app, once you've joined:
 
 - music plays through YouTube, so **the playing device has to keep its screen on with bye0 in front**.
   bye0 keeps the screen awake for you where the browser allows it.
+- if the playing device loses its connection for a moment, the music keeps going and it picks the party
+  back up by itself when the connection returns.
 - YouTube ads will show up and bye0 can't skip them.
 - the join code changes every few minutes, so use the one currently on screen.
 - nothing is kept after the party. when it ends (or nobody has touched it for 6 hours), everything about it is gone.

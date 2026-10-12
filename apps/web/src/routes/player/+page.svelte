@@ -146,6 +146,9 @@
 		</div>
 
 		<section class="now">
+			{#if party.status === 'connecting'}
+				<p class="dim" role="status">{m.reconnecting()}</p>
+			{/if}
 			<h2>{m.now_playing()}</h2>
 			{#if np}
 				<p><strong>{np.item.title}</strong></p>
