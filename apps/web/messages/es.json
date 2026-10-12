@@ -39,6 +39,8 @@
 	"queue_empty": "La cola está vacía.",
 	"remove": "Quitar",
 	"bump": "Poner siguiente",
+	"move_earlier": "Tocar antes",
+	"move_later": "Tocar después",
 	"upvote": "Votar a favor",
 	"change_version": "Versión",
 	"confirm_title": "¿Cuál querías?",

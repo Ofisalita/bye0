@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import {
+		canSwap,
 		CONFIRM_MS,
 		GOVERNANCES,
 		isLocked,
@@ -92,13 +93,25 @@
 		picking = null;
 	}
 
-	type Ask = { type: 'skip' } | { type: 'remove' | 'bump'; item: QueueItem };
+	type Ask = { type: 'skip' } | { type: 'remove' | 'bump'; item: QueueItem } | { type: 'swap'; item: QueueItem; other: QueueItem };
 	/** What the active rules would answer if this guest tried it. The server has the last word. */
 	function ask(intent: Ask): Resolution | null {
 		if (!ctx || !governance || !party.you) return null;
 		return governance.handle({ ...intent, by: party.you }, ctx);
 	}
 	const may = (intent: Ask) => ask(intent)?.kind === 'apply';
+
+	/** The nearest song up (-1) or down (1) the queue that this guest may swap the one at `index` with. */
+	function swapTarget(index: number, step: -1 | 1): QueueItem | undefined {
+		const queue = s?.queue ?? [];
+		const item = queue[index];
+		if (!item || !ordering?.swaps) return undefined;
+		for (let i = index + step; queue[i]; i += step) {
+			const other = queue[i]!;
+			if (canSwap(ordering, item, other) && may({ type: 'swap', item, other })) return other;
+		}
+		return undefined;
+	}
 
 	if (!party.state && party.status === 'idle' && !party.resume()) goto(resolve('/'));
 
@@ -287,12 +300,32 @@
 
 		<section class="card">
 			<h2>{m.up_next()}</h2>
-			{#each s.queue as item (item.id)}
-				<div class="row">
+			{#each s.queue as item, index (item.id)}
+				{@const earlier = swapTarget(index, -1)}
+				{@const later = swapTarget(index, 1)}
+				<div class="row song">
 					<div class="grow">
 						<p class="ellipsis">{item.title}</p>
 						<p class="dim ellipsis">{subtitle(item)}</p>
 					</div>
+					{#if earlier || later}
+						<button
+							class="small"
+							aria-label={m.move_earlier()}
+							disabled={!earlier}
+							onclick={() => earlier && party.send({ t: 'swap', itemId: item.id, otherId: earlier.id })}
+						>
+							↑
+						</button>
+						<button
+							class="small"
+							aria-label={m.move_later()}
+							disabled={!later}
+							onclick={() => later && party.send({ t: 'swap', itemId: item.id, otherId: later.id })}
+						>
+							↓
+						</button>
+					{/if}
 					{#if ordering?.usesUpvotes}
 						<button
 							class="small upvote"
@@ -514,6 +547,14 @@
 	.confirm,
 	.lobby {
 		outline: 2px solid var(--accent);
+	}
+	/* Too many buttons for one line: they drop under the title. */
+	.song {
+		flex-wrap: wrap;
+		justify-content: flex-end;
+	}
+	.song > .grow {
+		flex-basis: 50%;
 	}
 	.upvote {
 		white-space: nowrap;

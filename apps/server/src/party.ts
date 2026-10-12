@@ -6,6 +6,7 @@ import {
 	isLocked,
 	NICKNAME_MAX,
 	ORDERINGS,
+	canSwap,
 	type Candidate,
 	type ErrorCode,
 	type Guest,
@@ -85,6 +86,7 @@ export class Party {
 	private tokens = new Map<string, GuestId>();
 	private banned = new Set<string>();
 	private queue: QueueItem[] = [];
+	private nextSlot = 0;
 	/** connection id → guest; one guest may have several tabs open. */
 	private conns = new Map<string, GuestId>();
 	private playerConn: string | null = null;
@@ -137,6 +139,9 @@ export class Party {
 		party.tokens = new Map(s.tokens);
 		party.banned = new Set(s.banned);
 		party.queue = s.queue;
+		// A snapshot from before songs had slots: add order gives them theirs.
+		[...party.queue].sort((a, b) => a.addedAt - b.addedAt).forEach((item, i) => (item.slot ??= i));
+		party.nextSlot = Math.max(-1, ...party.queue.map((i) => i.slot)) + 1;
 		party.lastPlayedAt = s.lastPlayedAt;
 		party.hostIps = new Set(s.hostIps);
 		return party;
@@ -344,6 +349,7 @@ export class Party {
 			id: crypto.randomUUID(),
 			addedBy: by,
 			addedAt: now,
+			slot: this.nextSlot++,
 			title: track.title,
 			artists: track.artists,
 			durationMs: track.durationMs,
@@ -377,8 +383,8 @@ export class Party {
 			this.queue.push({
 				id: crypto.randomUUID(),
 				addedBy: by,
-				// A millisecond apart, so orderings that sort by add time keep the album's order.
-				addedAt: now + i,
+				addedAt: now,
+				slot: this.nextSlot++,
 				title: t.title,
 				artists: t.artists,
 				durationMs: t.durationMs,
@@ -446,6 +452,18 @@ export class Party {
 		const res = this.resolve({ type: 'bump', by, item }, now);
 		if (res.kind !== 'apply') return 'not-allowed';
 		item.bumpedAt = now;
+		return null;
+	}
+
+	/** Two queued songs trade places, if the ordering has places to trade and the rules let `by`. */
+	swap(by: GuestId, itemId: string, otherId: string, now: number): Result {
+		const item = this.queue.find((i) => i.id === itemId);
+		const other = this.queue.find((i) => i.id === otherId);
+		if (!item || !other) return 'bad-request';
+		if (!canSwap(ORDERINGS[this.settings.ordering]!, item, other)) return 'not-allowed';
+		const res = this.resolve({ type: 'swap', by, item, other }, now);
+		if (res.kind !== 'apply') return 'not-allowed';
+		[item.slot, other.slot] = [other.slot, item.slot];
 		return null;
 	}
 

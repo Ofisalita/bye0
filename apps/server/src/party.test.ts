@@ -209,6 +209,37 @@ describe('Party', () => {
 		expect(party.state(9).queue).toMatchObject([{ title: 'b1', upvotes: { [host]: 6 } }]);
 	});
 
+	test('swap: guests rearrange their own songs; under anarchy anyone moves anything the order allows', () => {
+		const { party, host, ana, beto } = setup();
+		for (const [i, title] of ['a1', 'a2', 'a3'].entries()) party.add(ana, track(title), i);
+		party.add(beto, track('b1'), 3);
+		const titles = () => party.state(9).queue.map((i) => i.title);
+		const id = (title: string) => party.state(9).queue.find((i) => i.title === title)!.id;
+		expect(titles()).toEqual(['a1', 'b1', 'a2', 'a3']);
+
+		// Round-robin: a3 takes a1's turn, and beto's turn is untouched.
+		expect(party.swap(ana, id('a3'), id('a1'), 4)).toBeNull();
+		expect(titles()).toEqual(['a3', 'b1', 'a2', 'a1']);
+		expect(party.swap(beto, id('a3'), id('a2'), 4)).toBe('not-allowed'); // not his songs
+		expect(party.swap(ana, id('a3'), id('b1'), 4)).toBe('not-allowed'); // not all hers
+		expect(party.swap(ana, id('a3'), 'nope', 4)).toBe('bad-request');
+
+		party.patchSettings({ governance: 'anarchy' }, host);
+		expect(party.swap(beto, id('a3'), id('a2'), 5)).toBeNull();
+		expect(titles()).toEqual(['a2', 'b1', 'a3', 'a1']);
+		expect(party.swap(beto, id('a2'), id('b1'), 5)).toBe('not-allowed'); // round-robin keeps the turns
+
+		party.patchSettings({ ordering: 'fifo' }, host);
+		expect(titles()).toEqual(['a2', 'a3', 'a1', 'b1']);
+		expect(party.swap(beto, id('b1'), id('a2'), 6)).toBeNull();
+		expect(titles()).toEqual(['b1', 'a3', 'a1', 'a2']);
+
+		expect(party.bump(ana, id('a1'), 7)).toBeNull();
+		expect(party.swap(ana, id('a1'), id('a3'), 8)).toBe('not-allowed'); // bumped songs stay in front
+		party.patchSettings({ ordering: 'vote-ranked' }, host);
+		expect(party.swap(ana, id('a3'), id('a2'), 8)).toBe('not-allowed'); // votes decide here
+	});
+
 	test('player errors fall through candidates, then skip', () => {
 		const { party, host, ana } = setup();
 		party.start(host, 0);
@@ -329,6 +360,25 @@ describe('Party', () => {
 		expect(restored.join('beto', 'beto', 9)).toBe('banned');
 		expect(restored.join('cata', 'cata', 9, 'guest', '198.51.100.1')).toBe('other-network');
 		expect(restored.join('cata', 'cata', 9, 'guest', '203.0.113.7')).toMatchObject({ nickname: 'cata' });
+	});
+
+	test('a restored party keeps its swaps, and new songs still go to the back', () => {
+		const { party, ana } = setup({ ordering: 'fifo' });
+		for (const [i, title] of ['a1', 'a2', 'a3'].entries()) party.add(ana, track(title), i);
+		const [a1, , a3] = party.state(3).queue;
+		party.swap(ana, a1!.id, a3!.id, 3);
+		const snapshot = JSON.parse(JSON.stringify(party.snapshot()));
+		const titles = (p: Party) => p.state(9).queue.map((i) => i.title);
+
+		const restored = Party.restore(structuredClone(snapshot));
+		restored.add(restored.guestByToken('ana')!.id, track('a4'), 4);
+		expect(titles(restored)).toEqual(['a3', 'a2', 'a1', 'a4']);
+
+		// Saved before songs had slots: they line up in add order.
+		for (const item of snapshot.queue) delete item.slot;
+		const older = Party.restore(snapshot);
+		older.add(older.guestByToken('ana')!.id, track('a4'), 4);
+		expect(titles(older)).toEqual(['a1', 'a2', 'a3', 'a4']);
 	});
 
 	test('a player coming back only takes the role if nobody else has it', () => {

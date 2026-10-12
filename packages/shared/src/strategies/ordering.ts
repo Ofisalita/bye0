@@ -1,11 +1,13 @@
 import type { QueueItem } from '../types';
 import type { OrderingStrategy } from './types';
 
-const byAddedAt = (a: QueueItem, b: QueueItem) => a.addedAt - b.addedAt || a.id.localeCompare(b.id);
+/** Add order, as rearranged by any swaps. */
+const bySlot = (a: QueueItem, b: QueueItem) => a.slot - b.slot || a.id.localeCompare(b.id);
 
 export const fifo: OrderingStrategy = {
 	id: 'fifo',
-	order: (queue) => [...queue].sort(byAddedAt)
+	swaps: 'any',
+	order: (queue) => [...queue].sort(bySlot)
 };
 
 const upvotes = (item: QueueItem) => Object.keys(item.upvotes).length;
@@ -14,7 +16,7 @@ const upvotes = (item: QueueItem) => Object.keys(item.upvotes).length;
 export const voteRanked: OrderingStrategy = {
 	id: 'vote-ranked',
 	usesUpvotes: true,
-	order: (queue) => [...queue].sort((a, b) => upvotes(b) - upvotes(a) || byAddedAt(a, b))
+	order: (queue) => [...queue].sort((a, b) => upvotes(b) - upvotes(a) || bySlot(a, b))
 };
 
 /** A vote is worth half as much every time this long passes. */
@@ -35,7 +37,7 @@ export const hot: OrderingStrategy = {
 				Object.values(item.upvotes).reduce((sum, at) => sum + 0.5 ** ((ctx.now - at) / HOT_HALF_LIFE_MS), 0)
 			])
 		);
-		return [...queue].sort((a, b) => heat.get(b)! - heat.get(a)! || byAddedAt(a, b));
+		return [...queue].sort((a, b) => heat.get(b)! - heat.get(a)! || bySlot(a, b));
 	}
 };
 
@@ -52,7 +54,7 @@ function hash(text: string): number {
  */
 export const shuffle: OrderingStrategy = {
 	id: 'shuffle',
-	order: (queue) => [...queue].sort((a, b) => hash(a.id) - hash(b.id) || byAddedAt(a, b))
+	order: (queue) => [...queue].sort((a, b) => hash(a.id) - hash(b.id) || bySlot(a, b))
 };
 
 /**
@@ -61,11 +63,13 @@ export const shuffle: OrderingStrategy = {
  */
 export const roundRobin: OrderingStrategy = {
 	id: 'round-robin',
+	// Turns belong to guests, so a song can only take the place of another from the same guest.
+	swaps: 'own',
 	order(queue, ctx) {
 		const seen = new Map<string, number>();
 		const lastPlayed = (item: QueueItem) => ctx.lastPlayedAt[item.addedBy] ?? -Infinity;
 		return [...queue]
-			.sort(byAddedAt)
+			.sort(bySlot)
 			.map((item) => {
 				const round = seen.get(item.addedBy) ?? 0;
 				seen.set(item.addedBy, round + 1);
@@ -76,8 +80,14 @@ export const roundRobin: OrderingStrategy = {
 					a.round - b.round ||
 					// `||` also covers -Infinity - -Infinity = NaN (neither has played yet)
 					lastPlayed(a.item) - lastPlayed(b.item) ||
-					byAddedAt(a.item, b.item)
+					bySlot(a.item, b.item)
 			)
 			.map(({ item }) => item);
 	}
 };
+
+/** Whether the ordering lets these two songs trade places. Songs bumped to the front stay put. */
+export function canSwap(ordering: OrderingStrategy, a: QueueItem, b: QueueItem): boolean {
+	if (a.id === b.id || a.bumpedAt !== undefined || b.bumpedAt !== undefined) return false;
+	return ordering.swaps === 'any' || (ordering.swaps === 'own' && a.addedBy === b.addedBy);
+}

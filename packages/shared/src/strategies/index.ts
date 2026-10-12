@@ -4,7 +4,7 @@ import type { GovernanceMode, OrderingStrategy } from './types';
 
 export * from './types';
 export { skipVotesNeeded } from './governance';
-export { HOT_HALF_LIFE_MS } from './ordering';
+export { canSwap, HOT_HALF_LIFE_MS } from './ordering';
 
 /**
  * Lookup table with no prototype, so ids a client sends like "constructor" or "toString"

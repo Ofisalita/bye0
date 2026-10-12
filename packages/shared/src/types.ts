@@ -29,6 +29,8 @@ export interface QueueItem {
 	id: string;
 	addedBy: GuestId;
 	addedAt: number;
+	/** Its place in add order: a per-party counter. Two songs that swap places trade these. */
+	slot: number;
 	title: string;
 	artists: string[];
 	durationMs: number;
