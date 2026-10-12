@@ -56,6 +56,21 @@ describe('Party', () => {
 		expect(party.nowPlaying?.skipVotes).toEqual([]);
 	});
 
+	test('democracy: a guest going offline lowers the bar, unless offline guests count', () => {
+		for (const skipCountsOffline of [false, true]) {
+			const { party, host, ana } = setup({ skipThreshold: 0.6, skipCountsOffline }); // 3 guests → 2 votes
+			party.start(host, 0);
+			party.add(ana, track('a1'), 1);
+			party.add(ana, track('a2'), 2);
+			party.disconnect('conn-beto'); // 2 connected → 2 votes; offline counted → still 2
+			party.disconnect('conn-host'); // 1 connected → 1 vote; offline counted → still 2
+			expect(party.skip(ana, 3)).toBeNull();
+			expect(party.nowPlaying?.item.title).toBe(skipCountsOffline ? 'a1' : 'a2');
+		}
+		const { party, host } = setup();
+		expect(party.patchSettings({ skipCountsOffline: 'yes' as unknown as boolean }, host)).toBe('bad-request');
+	});
+
 	test('guards: duration and per-guest limit', () => {
 		const { party, ana } = setup({ maxDurationMs: 60_000, maxQueuedPerGuest: 1 });
 		expect(party.add(ana, track('long'), 1)).toBe('too-long');
@@ -319,6 +334,97 @@ describe('Party', () => {
 		expect(party.join('eli', 'eli', 3, 'guest', '198.51.100.1')).toMatchObject({ nickname: 'eli' });
 	});
 
+	test('a snapshot survives JSON and restores the same party, minus connections', () => {
+		const { party, host, ana, beto } = setup({ ordering: 'fifo' });
+		party.patchSettings({ sameNetwork: true }, host);
+		party.connect('conn-host-2', host, 0, '203.0.113.7');
+		party.start(host, 1);
+		party.add(ana, track('a1', 2), 2);
+		party.add(beto, track('b1'), 3);
+		party.add(ana, track('a2'), 4);
+		party.upvote(beto, party.state(5).queue.find((i) => i.title === 'a2')!.id, 5);
+		party.claimPlayer('conn-host');
+		party.heartbeat('conn-host', party.nowPlaying!.item.id, 42_000, false, 6);
+		party.skip(ana, 7);
+		party.kick(host, beto);
+
+		const restored = Party.restore(JSON.parse(JSON.stringify(party.snapshot())));
+		const before = party.state(8);
+		const after = restored.state(8);
+		expect(after).toEqual({
+			...before,
+			guests: before.guests.map((g) => ({ ...g, connected: false })),
+			playerId: null
+		});
+		expect(restored.guestByToken('ana')?.id).toBe(ana);
+		expect(restored.join('beto', 'beto', 9)).toBe('banned');
+		expect(restored.join('cata', 'cata', 9, 'guest', '198.51.100.1')).toBe('other-network');
+		expect(restored.join('cata', 'cata', 9, 'guest', '203.0.113.7')).toMatchObject({ nickname: 'cata' });
+	});
+
+	test('a player coming back only takes the role if nobody else has it', () => {
+		const { party, host } = setup();
+		party.connect('conn-host-tv', host, 0);
+		expect(party.claimPlayer('conn-host', false)).toBeNull();
+		expect(party.claimPlayer('conn-host-tv', false)).toBe('not-allowed');
+		expect(party.claimPlayer('conn-host-tv')).toBeNull(); // an explicit tap still takes over
+	});
+
+	test('collections: queued as stubs in album order, within the limits', () => {
+		const { party, host, ana } = setup({ ordering: 'fifo', maxDurationMs: 300_000, maxQueuedPerGuest: 4 });
+		party.add(ana, track('single'), 0);
+		const album = ['t1', 't2', 'long', 't3', 't4', 't5'].map((title) => ({
+			title,
+			artists: ['x'],
+			durationMs: title === 'long' ? 600_000 : 200_000,
+			source: `https://open.spotify.com/track/${title}`
+		}));
+		expect(party.addCollection(ana, album, 1)).toBeNull();
+		// 1 single + 3 of the album fill ana's 4; the long one is left out
+		expect(party.state(2).queue.map((i) => [i.title, i.source !== undefined])).toEqual([
+			['single', false],
+			['t1', true],
+			['t2', true],
+			['t3', true]
+		]);
+		expect(party.addCollection(ana, album, 2)).toBe('queue-limit');
+		expect(party.stubsAhead(2, 3).map((i) => i.title)).toEqual(['t1']);
+		party.patchSettings({ maxQueuedPerGuest: null }, host);
+		expect(party.addCollection(ana, [album[2]!], 4)).toBe('too-long');
+	});
+
+	test('collections: stubs wait for their lookup; a failed one just leaves', () => {
+		const { party, host, ana, beto } = setup({ ordering: 'fifo' });
+		const stub = (title: string) => ({ title, artists: [], durationMs: 0, source: `https://x/${title}` });
+		party.addCollection(ana, [stub('s1'), stub('s2')], 0);
+		party.add(beto, track('b1'), 5);
+		party.start(host, 6);
+		expect(party.nowPlaying?.item.title).toBe('b1'); // s1 and s2 aren't looked up yet
+		const [s1, s2] = party.state(7).queue;
+		expect(party.fillStub(s2!.id, 'unresolvable', 8)).toBe(true);
+		expect(party.fillStub(s1!.id, { ...track('S1', 2), needsConfirmation: true }, 9)).toBe(true);
+		const [filled, ...rest] = party.state(9).queue;
+		expect(rest).toEqual([]);
+		expect(filled).toMatchObject({ title: 'S1', candidates: [{}, {}] });
+		expect(filled!.source).toBeUndefined();
+		expect(filled!.confirmBy).toBeUndefined(); // album songs never prompt
+		expect(party.fillStub(s1!.id, track('again'), 10)).toBe(false); // already looked up
+
+		party.ended('conn-host', party.nowPlaying!.item.id, 11); // not the player: ignored
+		party.claimPlayer('conn-host');
+		party.ended('conn-host', party.nowPlaying!.item.id, 12);
+		expect(party.nowPlaying?.item.title).toBe('S1');
+	});
+
+	test('collections: a stub looked up while nothing plays starts right away', () => {
+		const { party, host, ana } = setup();
+		party.addCollection(ana, [{ title: 's1', artists: [], durationMs: 0, source: 'https://x/s1' }], 0);
+		party.start(host, 1);
+		expect(party.nowPlaying).toBeNull();
+		party.fillStub(party.state(2).queue[0]!.id, track('S1'), 2);
+		expect(party.nowPlaying?.item.title).toBe('S1');
+	});
+
 	test('kick bans the device and drops its songs', () => {
 		const { party, host, ana } = setup();
 		party.add(ana, track('a1'), 1);
@@ -369,6 +475,19 @@ describe('Registry', () => {
 
 		expect(reg.tick(PARTY_TTL_MS + 1).expired).toEqual([party]);
 		expect(reg.get(party.id)).toBeUndefined();
+	});
+
+	test('restore puts a party back with its current and grace-period codes', () => {
+		const reg = new Registry();
+		const party = reg.create(0);
+		const first = party.code;
+		reg.tick(CODE_ROTATE_MS);
+		const again = new Registry();
+		again.restore(Party.restore(JSON.parse(JSON.stringify(party.snapshot()))));
+		expect(again.byCode(party.code, CODE_ROTATE_MS + 1)?.id).toBe(party.id);
+		expect(again.byCode(first, CODE_ROTATE_MS + 1)?.id).toBe(party.id);
+		again.tick(CODE_ROTATE_MS + CODE_GRACE_MS + 1);
+		expect(again.byCode(first, CODE_ROTATE_MS + CODE_GRACE_MS + 2)).toBeUndefined();
 	});
 
 	test('join: a whole party may join from one IP, wrong codes from it are limited', () => {

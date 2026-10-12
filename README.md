@@ -33,6 +33,10 @@ you can change the rules mid-party. "who decides" has four settings:
 - **Anarchy**: anyone skips, removes or moves any song to the front, no vote needed, and anyone can move
   anyone's songs up and down.
 
+in the two democracies you choose how many of the guests a skip needs. guests whose phone is offline don't
+count, so the bar drops as phones go to sleep. tick **Guests who are offline still count for skip votes** if
+you'd rather it didn't.
+
 "queue order" can also go by votes: **Most voted first** plays the songs with the most ▲, and **Hot** does
 the same but lets old votes fade (a vote is worth half after ten minutes), so recent favourites win.
 
@@ -66,7 +70,8 @@ you can also send songs straight from your music app, once you've joined:
   bye0 keeps the screen awake for you where the browser allows it.
 - YouTube ads will show up and bye0 can't skip them.
 - the join code changes every few minutes, so use the one currently on screen.
-- nothing is saved. when the party ends, everything about it is gone.
+- nothing is kept after the party. when it ends (or nobody has touched it for 6 hours), everything about it is gone.
+  while it's on, a restart of the bye0 server doesn't end it: everyone reconnects by themselves.
 - available in English and Spanish (it follows your browser language; you can switch on the start page).
 
 ## What works today
@@ -78,9 +83,9 @@ bye0 is in early development.
 | YouTube and YouTube Music links | ✅ |
 | Spotify song links | ✅ if you also run the matching service (see below) |
 | choosing the right version when the match is unsure | ✅ (with the matching service) |
-| Spotify albums and playlists | 🚧 coming next |
+| Spotify albums and playlists | 🚧 bye0 is ready (the host turns it on); waiting on the matching service |
 | Apple Music, Deezer, Tidal links | 🚧 coming next |
-| searching for a song by name | 🚧 |
+| searching for a song by name | 🚧 bye0 is ready; waiting on the matching service |
 | more party styles (song battles, minigames to settle skips, a rotating DJ crown…) | 🚧 |
 | "your song is next" notifications | 🚧 |
 | skins and a visualizer | later |
@@ -126,6 +131,17 @@ MATCHING_URL=http://localhost:8000 bun run dev:server
 add `MATCHING_COUNTRY=CL` (any two-letter country code) to get search results for your country.
 
 if nidol is down or can't handle a link, YouTube links keep working and guests are asked to paste one.
+
+### Surviving restarts
+
+by default parties live in the party server's memory, so restarting it ends them. give it a
+[Redis](https://redis.io) (or [Valkey](https://valkey.io)) and they survive:
+
+```sh
+REDIS_URL=redis://localhost:6379 bun run dev:server
+```
+
+the Docker Compose setup already includes one.
 
 ## License
 

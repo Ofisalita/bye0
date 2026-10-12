@@ -1,7 +1,7 @@
 # bye0 and nidol (its matching service) as one Coolify resource.
 #
 # In Coolify: new resource from this repo, build pack "Docker Compose", then give the `web`
-# service a domain. `server` and `nidol` get none: they are only reached over the internal network.
+# service a domain. `server`, `nidol` and `redis` get none: they are only reached over the internal network.
 
 services:
   web:
@@ -18,9 +18,24 @@ services:
       MATCHING_URL: http://nidol:8000
       # Where nidol localizes its searches (ISO 3166-1 alpha-2).
       MATCHING_COUNTRY: CL
+      # Keeps parties across redeploys of this service.
+      REDIS_URL: redis://redis:6379
+    depends_on: [redis]
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine
+    # Append-only file on a volume, so recreating the container keeps live parties too.
+    # Nothing piles up: each party's key expires 6 h after its last change.
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
     restart: unless-stopped
 
   nidol:
     # Built from nidol's own repo and Dockerfile; a redeploy picks up its latest main.
     build: https://github.com/Ofisalita/nidol.git#main
     restart: unless-stopped
+
+volumes:
+  redis-data:

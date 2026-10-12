@@ -122,6 +122,17 @@ describe('governance', () => {
 		}
 	});
 
+	test('skip votes: offline guests count only when the host says so', () => {
+		const g = GOVERNANCES['full-democracy']!;
+		const counting = (skipCountsOffline: boolean): PartyContext => {
+			const c = ctx(guests, [], 1);
+			return { ...c, settings: { ...c.settings, skipCountsOffline } };
+		};
+		// 4 connected and 1 offline, everyone must agree
+		expect(g.handle({ type: 'skip', by: 'a' }, counting(false))).toEqual({ kind: 'vote', have: 1, needed: 4 });
+		expect(g.handle({ type: 'skip', by: 'a' }, counting(true))).toEqual({ kind: 'vote', have: 1, needed: 5 });
+	});
+
 	test('full democracy: the host is one more voter', () => {
 		const g = GOVERNANCES['full-democracy']!;
 		expect(g.handle({ type: 'skip', by: 'h' }, ctx(guests, [], 1))).toEqual({ kind: 'vote', have: 1, needed: 4 });

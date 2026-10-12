@@ -1,8 +1,9 @@
 import { afterAll, expect, test } from 'bun:test';
-import { matchingService, type Resolver } from './matching';
+import { collectionExpander, matchingService, songSearch, type Resolver } from './matching';
 
 const SPOTIFY = 'https://open.spotify.com/track/0DiWol3AO6WpXZgp0goxAV';
 const ALBUM = 'https://open.spotify.com/album/2noRn2Aes5aoNVsU6iWThc';
+const PLAYLIST = 'https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M';
 const YOUTUBE = 'https://youtu.be/FGBhQbmPwH8';
 const LIVE = 'https://www.youtube.com/live/jfKfPfyJRdk';
 
@@ -12,7 +13,31 @@ let asked: Record<string, unknown> = {};
 const nidol = Bun.serve({
 	port: 0,
 	async fetch(req) {
+		const { pathname, searchParams } = new URL(req.url);
+		if (pathname === '/search') {
+			asked = Object.fromEntries(searchParams);
+			if (asked.q === 'down') return Response.json({ error: 'search_unavailable' }, { status: 503 });
+			return Response.json({
+				results: [
+					{ title: 'One More Time', artists: ['Daft Punk'], durationMs: 320357, artworkUrl: 'https://img/1', isrc: 'GBDUW0000053', source: { platform: 'deezer', id: '3135556', url: 'https://www.deezer.com/track/3135556' } },
+					{ title: 'One More Time (Live)', artists: ['Daft Punk'], durationMs: null, artworkUrl: null, isrc: null, source: { platform: 'ytmusic', id: 'x', url: 'https://music.youtube.com/watch?v=xxxxxxxxxxx' } }
+				]
+			});
+		}
 		asked = (await req.json()) as Record<string, unknown>;
+		if (new URL(req.url).pathname === '/expand') {
+			if (asked.input === PLAYLIST)
+				return Response.json({ error: 'upstream_error', source: 'spotify' }, { status: 502 });
+			if (asked.input !== ALBUM) return Response.json({ error: 'unsupported_input' }, { status: 422 });
+			return Response.json({
+				collection: { kind: 'album', platform: 'spotify', title: 'Discovery' },
+				tracks: [
+					{ title: 'One More Time', artists: ['Daft Punk'], durationMs: 320357, explicit: false, source: { platform: 'spotify', id: 'a', url: SPOTIFY } },
+					{ title: 'Aerodynamic', artists: ['Daft Punk'], durationMs: null, explicit: false, source: { platform: 'spotify', id: 'b', url: 'https://open.spotify.com/track/b' } }
+				],
+				truncated: false
+			});
+		}
 		const input = asked.input;
 		if (input === SPOTIFY)
 			return Response.json({
@@ -64,6 +89,35 @@ test('sends the country and the party\'s audio preference along', async () => {
 	expect(asked).toMatchObject({ preferAudio: true });
 	await matchingService(nidol.url.href)(SPOTIFY);
 	expect(asked).not.toHaveProperty('country');
+});
+
+test('an album expands into its songs, with unknown durations as 0', async () => {
+	const expand = collectionExpander(nidol.url.href);
+	expect(await expand(ALBUM)).toEqual([
+		{ title: 'One More Time', artists: ['Daft Punk'], durationMs: 320357, source: SPOTIFY },
+		{ title: 'Aerodynamic', artists: ['Daft Punk'], durationMs: 0, source: 'https://open.spotify.com/track/b' }
+	]);
+	expect(await expand(PLAYLIST)).toBe('matching-unavailable');
+	expect(await expand('https://example.com')).toBe('unresolvable');
+});
+
+test('a nidol without /expand reads as "collections not available"', async () => {
+	const old = Bun.serve({ port: 0, fetch: () => Response.json({ detail: 'Not Found' }, { status: 404 }) });
+	expect(await collectionExpander(old.url.href)(ALBUM)).toBe('collection');
+	old.stop(true);
+});
+
+test('search finds songs in the party\'s country, unknowns left out or 0', async () => {
+	const find = songSearch(nidol.url.href, { country: 'CL' });
+	expect(await find('one more time')).toEqual([
+		{ title: 'One More Time', artists: ['Daft Punk'], durationMs: 320357, artworkUrl: 'https://img/1', url: 'https://www.deezer.com/track/3135556' },
+		{ title: 'One More Time (Live)', artists: ['Daft Punk'], durationMs: 0, url: 'https://music.youtube.com/watch?v=xxxxxxxxxxx' }
+	]);
+	expect(asked).toEqual({ q: 'one more time', country: 'CL' });
+	expect(await find('down')).toBe('matching-unavailable');
+	const old = Bun.serve({ port: 0, fetch: () => Response.json({ detail: 'Not Found' }, { status: 404 }) });
+	expect(await songSearch(old.url.href)('x')).toBe('matching-unavailable');
+	old.stop(true);
 });
 
 test('errors: collections, outages and everything else', async () => {

@@ -32,14 +32,46 @@ export interface ResolvedTrack {
 	isLive?: boolean;
 }
 
+/** One song of an album or playlist, before it's been looked up. */
+export interface CollectionTrack {
+	title: string;
+	artists: string[];
+	durationMs: number;
+	/** A link the matching service resolves to this song. */
+	source: string;
+}
+
 type Result = ErrorCode | null;
+
+/**
+ * Everything about a party that should survive a server restart, as plain JSON.
+ * Connections don't: clients reconnect and resume, and the player claims its role again.
+ */
+export interface PartySnapshot {
+	v: 1;
+	id: string;
+	createdAt: number;
+	code: string;
+	previousCode: string | null;
+	codeRotatedAt: number;
+	lastActivity: number;
+	started: boolean;
+	settings: PartySettings;
+	nowPlaying: NowPlaying | null;
+	guests: Guest[];
+	tokens: [string, GuestId][];
+	banned: string[];
+	queue: QueueItem[];
+	lastPlayedAt: Record<GuestId, number>;
+	hostIps: string[];
+}
 
 /**
  * Authoritative state of one party. No I/O in here: the caller passes `now`,
  * and broadcasts `state()` after any call that returns without an error.
  */
 export class Party {
-	readonly id = crypto.randomUUID();
+	readonly id: string;
 	code = '';
 	previousCode: string | null = null;
 	codeRotatedAt = 0;
@@ -62,11 +94,54 @@ export class Party {
 	/** Every address the host has connected from: the networks "same network" lets in. */
 	private hostIps = new Set<string>();
 
-	constructor(now: number, settings: Partial<PartySettings> = {}) {
+	constructor(now: number, settings: Partial<PartySettings> = {}, id: string = crypto.randomUUID()) {
+		this.id = id;
 		this.lastActivity = now;
 		this.createdAt = now;
 		this.settings = { ...DEFAULT_SETTINGS };
 		this.patchSettings(settings);
+	}
+
+	// --- persistence ---
+
+	snapshot(): PartySnapshot {
+		return {
+			v: 1,
+			id: this.id,
+			createdAt: this.createdAt,
+			code: this.code,
+			previousCode: this.previousCode,
+			codeRotatedAt: this.codeRotatedAt,
+			lastActivity: this.lastActivity,
+			started: this.started,
+			settings: this.settings,
+			nowPlaying: this.nowPlaying,
+			guests: [...this.guests.values()],
+			tokens: [...this.tokens],
+			banned: [...this.banned],
+			queue: this.queue,
+			lastPlayedAt: this.lastPlayedAt,
+			hostIps: [...this.hostIps]
+		};
+	}
+
+	/** Settings go through validation, so a snapshot from an older version gets today's defaults. */
+	static restore(s: PartySnapshot): Party {
+		const party = new Party(s.createdAt, s.settings, s.id);
+		party.code = s.code;
+		party.previousCode = s.previousCode;
+		party.codeRotatedAt = s.codeRotatedAt;
+		party.lastActivity = s.lastActivity;
+		party.started = s.started;
+		party.nowPlaying = s.nowPlaying;
+		// Nobody is connected until their device reconnects.
+		party.guests = new Map(s.guests.map((g) => [g.id, { ...g, connected: false }]));
+		party.tokens = new Map(s.tokens);
+		party.banned = new Set(s.banned);
+		party.queue = s.queue;
+		party.lastPlayedAt = s.lastPlayedAt;
+		party.hostIps = new Set(s.hostIps);
+		return party;
 	}
 
 	// --- views ---
@@ -205,11 +280,13 @@ export class Party {
 			!GOVERNANCES[next.governance] ||
 			typeof next.skipThreshold !== 'number' ||
 			!(next.skipThreshold > 0 && next.skipThreshold <= 1) ||
+			typeof next.skipCountsOffline !== 'boolean' ||
 			typeof next.showAttribution !== 'boolean' ||
 			typeof next.preferAudio !== 'boolean' ||
 			typeof next.approveJoins !== 'boolean' ||
 			typeof next.locked !== 'boolean' ||
 			typeof next.sameNetwork !== 'boolean' ||
+			typeof next.allowCollections !== 'boolean' ||
 			!posOrNull(next.autoLockMs) ||
 			!posOrNull(next.maxDurationMs) ||
 			!posOrNull(next.maxQueuedPerGuest) ||
@@ -221,6 +298,7 @@ export class Party {
 			ordering: next.ordering,
 			governance: next.governance,
 			skipThreshold: next.skipThreshold,
+			skipCountsOffline: next.skipCountsOffline,
 			showAttribution: next.showAttribution,
 			maxDurationMs: next.maxDurationMs,
 			maxQueuedPerGuest: next.maxQueuedPerGuest,
@@ -229,7 +307,8 @@ export class Party {
 			approveJoins: next.approveJoins,
 			locked: next.locked,
 			autoLockMs: next.autoLockMs,
-			sameNetwork: next.sameNetwork
+			sameNetwork: next.sameNetwork,
+			allowCollections: next.allowCollections
 		};
 		// Nobody is left waiting for an approval that is no longer asked for.
 		if (!this.settings.approveJoins) for (const g of this.guests.values()) delete g.pending;
@@ -280,6 +359,69 @@ export class Party {
 		this.lastActivity = now;
 		if (this.started && !this.nowPlaying) this.advance(now);
 		return null;
+	}
+
+	/**
+	 * Queues an album or playlist as stubs, which are looked up only as they near the front
+	 * (nidol D9). Songs over the length limit are left out; the per-guest limit caps how many go in.
+	 */
+	addCollection(by: GuestId, tracks: CollectionTrack[], now: number): Result {
+		const guest = this.guests.get(by);
+		if (!guest) return 'not-allowed';
+		const limited = this.canAdd(by, now);
+		if (limited) return limited;
+		const max = this.settings.maxDurationMs;
+		const perGuest = this.settings.maxQueuedPerGuest;
+		const fitting = tracks.filter((t) => max === null || t.durationMs <= max);
+		const room = perGuest === null ? fitting.length : perGuest - this.queue.filter((i) => i.addedBy === by).length;
+		const taken = fitting.slice(0, room);
+		if (!taken.length) return tracks.length ? 'too-long' : 'unresolvable';
+		taken.forEach((t, i) =>
+			this.queue.push({
+				id: crypto.randomUUID(),
+				addedBy: by,
+				// A millisecond apart, so orderings that sort by add time keep the album's order.
+				addedAt: now + i,
+				title: t.title,
+				artists: t.artists,
+				durationMs: t.durationMs,
+				candidates: [],
+				candidateIndex: 0,
+				upvotes: {},
+				source: t.source
+			})
+		);
+		guest.lastAddedAt = now;
+		this.lastActivity = now;
+		return null;
+	}
+
+	/** Stubs among the next `n` songs to play: the ones to look up now. */
+	stubsAhead(n: number, now: number): QueueItem[] {
+		return this.orderedQueue(now)
+			.slice(0, n)
+			.filter((i) => i.source !== undefined);
+	}
+
+	/**
+	 * A stub's lookup finished: it becomes a normal song (auto-picked, no confirmation prompt),
+	 * or leaves the queue if it can't be played. False if the stub is gone already.
+	 */
+	fillStub(itemId: string, track: ResolvedTrack | ErrorCode, now: number): boolean {
+		const item = this.queue.find((i) => i.id === itemId && i.source !== undefined);
+		if (!item) return false;
+		const max = this.settings.maxDurationMs;
+		const playable =
+			typeof track !== 'string' && track.candidates.length > 0 && !(max !== null && (track.isLive || track.durationMs > max));
+		if (playable) {
+			item.title = track.title;
+			item.artists = track.artists;
+			item.durationMs = track.durationMs;
+			item.candidates = track.candidates;
+			delete item.source;
+		} else this.queue = this.queue.filter((i) => i !== item);
+		if (this.started && !this.nowPlaying) this.advance(now);
+		return true;
 	}
 
 	skip(by: GuestId, now: number): Result {
@@ -357,9 +499,11 @@ export class Party {
 
 	// --- player ---
 
-	claimPlayer(connId: string): Result {
+	/** `takeOver: false` only claims a free Player role: a player coming back after a dropped connection. */
+	claimPlayer(connId: string, takeOver = true): Result {
 		const guestId = this.conns.get(connId);
 		if (!guestId || this.is(guestId, 'guest')) return 'not-allowed';
+		if (!takeOver && this.playerConn) return 'not-allowed';
 		this.playerConn = connId;
 		return null;
 	}
@@ -410,7 +554,8 @@ export class Party {
 	}
 
 	private advance(now: number): void {
-		const next = this.orderedQueue(now)[0];
+		// Stubs wait until they're looked up; the next playable song goes first.
+		const next = this.orderedQueue(now).find((i) => i.source === undefined);
 		this.queue = this.queue.filter((i) => i !== next);
 		if (next) this.lastPlayedAt[next.addedBy] = now;
 		this.nowPlaying = next

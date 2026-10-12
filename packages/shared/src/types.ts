@@ -39,6 +39,11 @@ export interface QueueItem {
 	candidateIndex: number;
 	/** Set when someone with the right to do so moved it to the front. */
 	bumpedAt?: number;
+	/**
+	 * Set on an album/playlist song that hasn't been looked up yet: the link to resolve once it
+	 * nears the front. Until then `candidates` is empty and it can't play.
+	 */
+	source?: string;
 	/** Who upvoted it, and when. Kept under any ordering; only some use them. */
 	upvotes: Record<GuestId, number>;
 	/**
@@ -60,8 +65,10 @@ export interface NowPlaying {
 export interface PartySettings {
 	ordering: string;
 	governance: string;
-	/** Democracy: fraction of connected guests needed to skip (0–1]. */
+	/** Democracy: fraction of the guests needed to skip (0–1]. */
 	skipThreshold: number;
+	/** Democracy: guests who are offline right now still count toward that fraction. */
+	skipCountsOffline: boolean;
 	showAttribution: boolean;
 	maxDurationMs: number | null;
 	maxQueuedPerGuest: number | null;
@@ -77,6 +84,8 @@ export interface PartySettings {
 	autoLockMs: number | null;
 	/** New guests must come from the host's network (same public IPv4, or IPv6 /64). */
 	sameNetwork: boolean;
+	/** Album and playlist links add all their songs (up to the per-guest limit). */
+	allowCollections: boolean;
 }
 
 /** What strategies get to look at. */
@@ -87,6 +96,16 @@ export interface PartyContext {
 	/** When each guest last had one of their songs start playing. */
 	lastPlayedAt: Record<GuestId, number>;
 	now: number;
+}
+
+/** A song found by name; adding it means adding its `url`. */
+export interface SearchResult {
+	title: string;
+	artists: string[];
+	/** 0 when unknown. */
+	durationMs: number;
+	artworkUrl?: string;
+	url: string;
 }
 
 /** What every client receives. */
@@ -109,6 +128,7 @@ export const DEFAULT_SETTINGS: PartySettings = {
 	ordering: 'round-robin',
 	governance: 'full-democracy',
 	skipThreshold: 0.5,
+	skipCountsOffline: false,
 	showAttribution: true,
 	maxDurationMs: 10 * 60_000,
 	maxQueuedPerGuest: null,
@@ -117,7 +137,8 @@ export const DEFAULT_SETTINGS: PartySettings = {
 	approveJoins: false,
 	locked: false,
 	autoLockMs: null,
-	sameNetwork: false
+	sameNetwork: false,
+	allowCollections: false
 };
 
 /** Whether new guests are kept out: locked by hand, or the auto-lock time has come. */
