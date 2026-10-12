@@ -92,11 +92,11 @@ async function handle(ws: Socket, msg: ClientMessage) {
 			if (limited) return fail(ws, limited);
 			if (typeof msg.input !== 'string' || !msg.input.trim() || msg.input.length > MAX_INPUT_LENGTH)
 				return fail(ws, 'bad-request');
-			const track = await resolveTrack(msg.input).catch((err) => {
+			const track = await resolveTrack(msg.input).catch((err): ErrorCode => {
 				console.error('resolve failed:', err);
-				return null;
+				return 'unresolvable';
 			});
-			if (!track) return fail(ws, 'unresolvable');
+			if (typeof track === 'string') return fail(ws, track);
 			return done(party.add(me, track, Date.now()));
 		}
 		case 'skip':

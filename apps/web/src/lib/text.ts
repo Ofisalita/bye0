@@ -11,6 +11,8 @@ const ERRORS: Record<ErrorCode, () => string> = {
 	'already-voted': m.error_already_voted,
 	'nothing-playing': m.error_nothing_playing,
 	unresolvable: m.error_unresolvable,
+	collection: m.error_collection,
+	'matching-unavailable': m.error_matching_unavailable,
 	'too-long': m.error_too_long,
 	'queue-limit': m.error_queue_limit
 };

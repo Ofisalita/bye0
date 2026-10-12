@@ -67,6 +67,8 @@
 	"error_already_voted": "Ya votaste.",
 	"error_nothing_playing": "No hay nada sonando.",
 	"error_unresolvable": "No encontramos esa canción. Prueba con otro enlace.",
+	"error_collection": "Los álbumes y las playlists aún no funcionan. Pega una sola canción.",
+	"error_matching_unavailable": "No podemos buscar esa canción ahora. Pega un enlace de YouTube.",
 	"error_too_long": "Esa es demasiado larga para esta fiesta.",
 	"error_queue_limit": "Ya tienes suficientes canciones en cola. Espera a que suene una."
 }

@@ -1,0 +1,58 @@
+import { afterAll, expect, test } from 'bun:test';
+import { matchingService, type Resolver } from './matching';
+
+const SPOTIFY = 'https://open.spotify.com/track/0DiWol3AO6WpXZgp0goxAV';
+const ALBUM = 'https://open.spotify.com/album/2noRn2Aes5aoNVsU6iWThc';
+const YOUTUBE = 'https://youtu.be/FGBhQbmPwH8';
+
+/** Answers like nidol's walking skeleton does. */
+const nidol = Bun.serve({
+	port: 0,
+	async fetch(req) {
+		const { input } = (await req.json()) as { input: string };
+		if (input === SPOTIFY)
+			return Response.json({
+				canonical: { isrc: null, mbid: null, title: 'One More Time', artists: ['Daft Punk'], durationMs: 320357 },
+				candidates: [
+					{ videoId: 'wU26xVT_vBU', title: 'One More Time', channel: 'Daft Punk', durationMs: 321000, kind: 'official_audio', thumbnailUrl: 'x', confidence: 1 },
+					{ videoId: 'YVdy1rK9F1E', title: 'one more time', channel: null, durationMs: null, kind: 'user_upload', thumbnailUrl: 'x', confidence: 0.6 }
+				],
+				needsConfirmation: false
+			});
+		if (input === ALBUM) return Response.json({ error: 'collection_input', kind: 'album' }, { status: 409 });
+		if (input === 'down') return Response.json({ error: 'search_unavailable' }, { status: 503 });
+		return Response.json({ error: 'unsupported_input' }, { status: 422 });
+	}
+});
+afterAll(() => nidol.stop(true));
+
+const viaFallback: Resolver = async (input) => ({ title: `fallback ${input}`, artists: [], durationMs: 0, candidates: [] });
+const resolve = matchingService(nidol.url.href, viaFallback);
+
+test('a Spotify track comes back with ranked candidates, unknowns as 0 / empty', async () => {
+	expect(await resolve(SPOTIFY)).toEqual({
+		title: 'One More Time',
+		artists: ['Daft Punk'],
+		durationMs: 320357,
+		candidates: [
+			{ videoId: 'wU26xVT_vBU', title: 'One More Time', channel: 'Daft Punk', durationMs: 321000, kind: 'official_audio', confidence: 1 },
+			{ videoId: 'YVdy1rK9F1E', title: 'one more time', channel: '', durationMs: 0, kind: 'user_upload', confidence: 0.6 }
+		]
+	});
+});
+
+test('errors: collections, outages and everything else', async () => {
+	expect(await resolve(ALBUM)).toBe('collection');
+	expect(await resolve('down')).toBe('matching-unavailable');
+	expect(await resolve('one more time')).toBe('unresolvable');
+});
+
+test('YouTube links nidol refuses go to the fallback', async () => {
+	expect(await resolve(YOUTUBE)).toMatchObject({ title: `fallback ${YOUTUBE}` });
+});
+
+test('with nidol unreachable, YouTube links still resolve and the rest say so', async () => {
+	const offline = matchingService('http://127.0.0.1:1', viaFallback);
+	expect(await offline(YOUTUBE)).toMatchObject({ title: `fallback ${YOUTUBE}` });
+	expect(await offline(SPOTIFY)).toBe('matching-unavailable');
+});

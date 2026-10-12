@@ -67,6 +67,8 @@
 	"error_already_voted": "You already voted.",
 	"error_nothing_playing": "Nothing is playing.",
 	"error_unresolvable": "Couldn't find that song. Try another link.",
+	"error_collection": "Albums and playlists don't work yet. Paste a single song.",
+	"error_matching_unavailable": "Can't look that song up right now. Paste a YouTube link instead.",
 	"error_too_long": "That one is too long for this party.",
 	"error_queue_limit": "You have enough songs queued. Wait for one to play."
 }

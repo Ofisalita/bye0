@@ -55,7 +55,9 @@ bye0 is in early development.
 | | |
 |---|---|
 | YouTube and YouTube Music links | ✅ |
-| Spotify, Apple Music, Deezer, Tidal links | 🚧 coming next |
+| Spotify song links | ✅ if you also run the matching service (see below) |
+| Spotify albums and playlists | 🚧 coming next |
+| Apple Music, Deezer, Tidal links | 🚧 coming next |
 | searching for a song by name | 🚧 |
 | more party styles (song battles, minigames to settle skips, a rotating DJ crown…) | 🚧 |
 | "your song is next" notifications | 🚧 |
@@ -79,6 +81,27 @@ bun run dev:web -- --host     # the web app, on port 5173
 ```
 
 open `http://<your-computer's-ip>:5173` on any device on the same Wi-Fi.
+
+### Spotify links
+
+on its own, bye0 only understands YouTube links. Spotify links are handled by
+[nidol](https://github.com/Ofisalita/nidol), a separate matching service that finds the same song on YouTube.
+it needs [uv](https://docs.astral.sh/uv/) (or Docker; see its README). run it next to bye0:
+
+```sh
+git clone https://github.com/Ofisalita/nidol
+cd nidol
+uv sync
+uv run nidol                  # the matching service, on port 8000
+```
+
+then start the party server pointing at it, instead of the plain `dev:server` above:
+
+```sh
+MATCHING_URL=http://localhost:8000 bun run dev:server
+```
+
+if nidol is down or can't handle a link, YouTube links keep working and guests are asked to paste one.
 
 ## License
 

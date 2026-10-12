@@ -31,6 +31,8 @@ export type ErrorCode =
 	| 'already-voted'
 	| 'nothing-playing'
 	| 'unresolvable'
+	| 'collection'
+	| 'matching-unavailable'
 	| 'too-long'
 	| 'queue-limit';
 
