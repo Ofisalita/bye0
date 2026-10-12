@@ -1,0 +1,16 @@
+{
+	"name": "@bye0/shared",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"check": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/bun": "latest",
+		"typescript": "^6.0.3"
+	}
+}
