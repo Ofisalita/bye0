@@ -141,7 +141,7 @@
 
 {#if party.status === 'ended'}
 	<main class="page">
-		<p>{party.error ? errorText(party.error) : m.party_ended()}</p>
+		<p>{party.endReason ? errorText(party.endReason) : m.party_ended()}</p>
 		<a href={resolve('/')}>{m.back_home()}</a>
 	</main>
 {:else if !s}
