@@ -3,7 +3,13 @@ import type { ResolvedTrack } from './party';
 
 const TIMEOUT_MS = 8_000;
 
-export type Resolver = (input: string) => Promise<ResolvedTrack | ErrorCode>;
+/** Per-party preferences passed along with each lookup. */
+export interface ResolveOptions {
+	/** Put the official audio upload before the music video. */
+	preferAudio?: boolean;
+}
+
+export type Resolver = (input: string, options?: ResolveOptions) => Promise<ResolvedTrack | ErrorCode>;
 
 /** Pulls the video id out of youtube.com / music.youtube.com / youtu.be links. */
 export function youtubeId(input: string): string | null {
@@ -38,11 +44,16 @@ interface ResolveResponse {
 	needsConfirmation: boolean;
 }
 
-async function askNidol(baseUrl: string, input: string): Promise<ResolvedTrack | ErrorCode> {
+async function askNidol(
+	baseUrl: string,
+	input: string,
+	country: string | undefined,
+	options: ResolveOptions
+): Promise<ResolvedTrack | ErrorCode> {
 	const res = await fetch(new URL('/resolve', baseUrl), {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ input, target: 'youtube' }),
+		body: JSON.stringify({ input, target: 'youtube', country, preferAudio: options.preferAudio ?? false }),
 		signal: AbortSignal.timeout(TIMEOUT_MS)
 	});
 	// 409 collection_input: an album or playlist link. 5xx: nidol or one of its sources is down.
@@ -70,11 +81,16 @@ async function askNidol(baseUrl: string, input: string): Promise<ResolvedTrack |
 
 /**
  * Talks to the matching service (nidol). A YouTube link is playable as it is, so when nidol
- * can't take it (it doesn't accept them yet) or is down, `fallback` resolves it instead.
+ * rejects it or is down, `fallback` resolves it instead.
+ *
+ * `country` (ISO 3166-1 alpha-2, e.g. "CL") is where nidol localizes its searches to.
  */
-export function matchingService(baseUrl: string, fallback: Resolver = youtubeOnly): Resolver {
-	return async (input) => {
-		const result = await askNidol(baseUrl, input).catch((err): ErrorCode => {
+export function matchingService(
+	baseUrl: string,
+	{ country, fallback = youtubeOnly }: { country?: string; fallback?: Resolver } = {}
+): Resolver {
+	return async (input, options = {}) => {
+		const result = await askNidol(baseUrl, input, country, options).catch((err): ErrorCode => {
 			console.error('matching service failed:', err);
 			return 'matching-unavailable';
 		});

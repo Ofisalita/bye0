@@ -116,6 +116,8 @@ then start the party server pointing at it, instead of the plain `dev:server` ab
 MATCHING_URL=http://localhost:8000 bun run dev:server
 ```
 
+add `MATCHING_COUNTRY=CL` (any two-letter country code) to get search results for your country.
+
 if nidol is down or can't handle a link, YouTube links keep working and guests are asked to paste one.
 
 ## License

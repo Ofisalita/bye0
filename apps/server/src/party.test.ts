@@ -222,6 +222,8 @@ describe('Party', () => {
 		expect(party.patchSettings({ addCooldownMs: -1 }, host)).toBe('bad-request');
 		expect(party.patchSettings({ addCooldownMs: 30_000 }, host)).toBeNull();
 		expect(party.patchSettings({ addCooldownMs: null }, host)).toBeNull();
+		expect(party.patchSettings({ preferAudio: 'yes' as unknown as boolean }, host)).toBe('bad-request');
+		expect(party.patchSettings({ preferAudio: true }, host)).toBeNull();
 	});
 
 	test('a party created with bogus settings falls back to the defaults and still works', () => {

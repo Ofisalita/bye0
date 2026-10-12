@@ -176,6 +176,7 @@ export class Party {
 			typeof next.skipThreshold !== 'number' ||
 			!(next.skipThreshold > 0 && next.skipThreshold <= 1) ||
 			typeof next.showAttribution !== 'boolean' ||
+			typeof next.preferAudio !== 'boolean' ||
 			!posOrNull(next.maxDurationMs) ||
 			!posOrNull(next.maxQueuedPerGuest) ||
 			!posOrNull(next.addCooldownMs)
@@ -189,7 +190,8 @@ export class Party {
 			showAttribution: next.showAttribution,
 			maxDurationMs: next.maxDurationMs,
 			maxQueuedPerGuest: next.maxQueuedPerGuest,
-			addCooldownMs: next.addCooldownMs
+			addCooldownMs: next.addCooldownMs,
+			preferAudio: next.preferAudio
 		};
 		return null;
 	}
