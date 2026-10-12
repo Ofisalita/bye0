@@ -1,13 +1,30 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { CONFIRM_MS, GOVERNANCES, ORDERINGS, skipVotesNeeded, type PartyContext, type QueueItem, type Resolution } from '@bye0/shared';
+	import {
+		CONFIRM_MS,
+		GOVERNANCES,
+		ORDERINGS,
+		skipVotesNeeded,
+		type PartyContext,
+		type PartySettings,
+		type QueueItem,
+		type Resolution
+	} from '@bye0/shared';
 	import CandidatePicker from '#lib/CandidatePicker.svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import { party } from '#lib/party.svelte.ts';
 	import { errorText, label } from '#lib/text.ts';
 
+	// Choices for the host's limits; null turns a limit off.
+	const MAX_DURATION_CHOICES = [null, 5, 7, 10, 15, 20, 30].map((min) => min && min * 60_000);
+	const MAX_QUEUED_CHOICES = [null, 1, 2, 3, 5, 10];
 	const COOLDOWN_CHOICES = [null, 15_000, 30_000, 60_000, 120_000, 300_000];
+	type Limit = 'maxDurationMs' | 'maxQueuedPerGuest' | 'addCooldownMs';
+	const setLimit = (key: Limit, value: string) =>
+		party.send({ t: 'settings', patch: { [key]: Number(value) || null } as Partial<PartySettings> });
+	const span = (ms: number) =>
+		ms < 60_000 ? m.seconds({ n: ms / 1000 }) : ms < 3_600_000 ? m.minutes({ n: ms / 60_000 }) : m.hours({ n: ms / 3_600_000 });
 
 	let input = $state('');
 	/** Queue length when the last add was sent; the add is done once it changes or an error arrives. */
@@ -92,6 +109,17 @@
 		if (confirm(m.end_party_confirm())) party.send({ t: 'end' });
 	}
 </script>
+
+{#snippet limitSelect(text: string, key: Limit, choices: (number | null)[], show: (n: number) => string, off: string)}
+	<label>
+		<span class="dim">{text}</span>
+		<select value={String(s?.settings[key])} onchange={(e) => setLimit(key, e.currentTarget.value)}>
+			{#each choices as n (n)}
+				<option value={String(n)}>{n === null ? off : show(n)}</option>
+			{/each}
+		</select>
+	</label>
+{/snippet}
 
 {#if party.status === 'ended'}
 	<main class="page">
@@ -231,19 +259,6 @@
 						/>
 					</label>
 				{/if}
-				<label>
-					<span class="dim">{m.add_cooldown()}</span>
-					<select
-						value={String(s.settings.addCooldownMs)}
-						onchange={(e) => party.send({ t: 'settings', patch: { addCooldownMs: Number(e.currentTarget.value) || null } })}
-					>
-						{#each COOLDOWN_CHOICES as ms (ms)}
-							<option value={String(ms)}>
-								{ms === null ? m.add_cooldown_off() : ms < 60_000 ? m.seconds({ n: ms / 1000 }) : m.minutes({ n: ms / 60_000 })}
-							</option>
-						{/each}
-					</select>
-				</label>
 				<label class="row">
 					<input
 						type="checkbox"
@@ -260,6 +275,13 @@
 					/>
 					{m.show_attribution()}
 				</label>
+			</section>
+
+			<section class="card">
+				<h2>{m.limits()}</h2>
+				{@render limitSelect(m.max_duration(), 'maxDurationMs', MAX_DURATION_CHOICES, span, m.no_limit())}
+				{@render limitSelect(m.max_queued(), 'maxQueuedPerGuest', MAX_QUEUED_CHOICES, String, m.no_limit())}
+				{@render limitSelect(m.add_cooldown(), 'addCooldownMs', COOLDOWN_CHOICES, span, m.add_cooldown_off())}
 			</section>
 		{/if}
 
