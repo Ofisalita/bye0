@@ -324,6 +324,61 @@ describe('Party', () => {
 		expect(party.claimPlayer('conn-host-tv')).toBeNull(); // an explicit tap still takes over
 	});
 
+	test('collections: queued as stubs in album order, within the limits', () => {
+		const { party, host, ana } = setup({ ordering: 'fifo', maxDurationMs: 300_000, maxQueuedPerGuest: 4 });
+		party.add(ana, track('single'), 0);
+		const album = ['t1', 't2', 'long', 't3', 't4', 't5'].map((title) => ({
+			title,
+			artists: ['x'],
+			durationMs: title === 'long' ? 600_000 : 200_000,
+			source: `https://open.spotify.com/track/${title}`
+		}));
+		expect(party.addCollection(ana, album, 1)).toBeNull();
+		// 1 single + 3 of the album fill ana's 4; the long one is left out
+		expect(party.state(2).queue.map((i) => [i.title, i.source !== undefined])).toEqual([
+			['single', false],
+			['t1', true],
+			['t2', true],
+			['t3', true]
+		]);
+		expect(party.addCollection(ana, album, 2)).toBe('queue-limit');
+		expect(party.stubsAhead(2, 3).map((i) => i.title)).toEqual(['t1']);
+		party.patchSettings({ maxQueuedPerGuest: null }, host);
+		expect(party.addCollection(ana, [album[2]!], 4)).toBe('too-long');
+	});
+
+	test('collections: stubs wait for their lookup; a failed one just leaves', () => {
+		const { party, host, ana, beto } = setup({ ordering: 'fifo' });
+		const stub = (title: string) => ({ title, artists: [], durationMs: 0, source: `https://x/${title}` });
+		party.addCollection(ana, [stub('s1'), stub('s2')], 0);
+		party.add(beto, track('b1'), 5);
+		party.start(host, 6);
+		expect(party.nowPlaying?.item.title).toBe('b1'); // s1 and s2 aren't looked up yet
+		const [s1, s2] = party.state(7).queue;
+		expect(party.fillStub(s2!.id, 'unresolvable', 8)).toBe(true);
+		expect(party.fillStub(s1!.id, { ...track('S1', 2), needsConfirmation: true }, 9)).toBe(true);
+		const [filled, ...rest] = party.state(9).queue;
+		expect(rest).toEqual([]);
+		expect(filled).toMatchObject({ title: 'S1', candidates: [{}, {}] });
+		expect(filled!.source).toBeUndefined();
+		expect(filled!.confirmBy).toBeUndefined(); // album songs never prompt
+		expect(party.fillStub(s1!.id, track('again'), 10)).toBe(false); // already looked up
+
+		party.ended('conn-host', party.nowPlaying!.item.id, 11); // not the player: ignored
+		party.claimPlayer('conn-host');
+		party.ended('conn-host', party.nowPlaying!.item.id, 12);
+		expect(party.nowPlaying?.item.title).toBe('S1');
+	});
+
+	test('collections: a stub looked up while nothing plays starts right away', () => {
+		const { party, host, ana } = setup();
+		party.addCollection(ana, [{ title: 's1', artists: [], durationMs: 0, source: 'https://x/s1' }], 0);
+		party.start(host, 1);
+		expect(party.nowPlaying).toBeNull();
+		party.fillStub(party.state(2).queue[0]!.id, track('S1'), 2);
+		expect(party.nowPlaying?.item.title).toBe('S1');
+	});
+
 	test('kick bans the device and drops its songs', () => {
 		const { party, host, ana } = setup();
 		party.add(ana, track('a1'), 1);

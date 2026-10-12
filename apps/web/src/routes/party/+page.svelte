@@ -318,6 +318,14 @@
 				<label class="row">
 					<input
 						type="checkbox"
+						checked={s.settings.allowCollections}
+						onchange={(e) => party.send({ t: 'settings', patch: { allowCollections: e.currentTarget.checked } })}
+					/>
+					{m.allow_collections()}
+				</label>
+				<label class="row">
+					<input
+						type="checkbox"
 						checked={s.settings.showAttribution}
 						onchange={(e) => party.send({ t: 'settings', patch: { showAttribution: e.currentTarget.checked } })}
 					/>

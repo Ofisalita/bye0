@@ -1,5 +1,5 @@
 import type { ErrorCode } from '@bye0/shared';
-import type { ResolvedTrack } from './party';
+import type { CollectionTrack, ResolvedTrack } from './party';
 
 const TIMEOUT_MS = 8_000;
 
@@ -95,6 +95,38 @@ export function matchingService(
 			return 'matching-unavailable';
 		});
 		return typeof result === 'string' && youtubeId(input) ? fallback(input) : result;
+	};
+}
+
+export type Expander = (input: string) => Promise<CollectionTrack[] | ErrorCode>;
+
+/** The parts of nidol's `POST /expand` response we use. */
+interface ExpandResponse {
+	tracks: { title: string; artists: string[]; durationMs: number | null; source: { url: string } }[];
+}
+
+/** Turns an album or playlist link into its songs, through nidol's `POST /expand` (nidol D9). */
+export function collectionExpander(baseUrl: string): Expander {
+	return async (input) => {
+		const res = await fetch(new URL('/expand', baseUrl), {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ input }),
+			signal: AbortSignal.timeout(TIMEOUT_MS)
+		});
+		if (res.status >= 500) return 'matching-unavailable';
+		if (!res.ok) {
+			// nidol's own errors carry `error`; a bare 404/405 means this nidol has no /expand yet.
+			const body = (await res.json().catch(() => ({}))) as { error?: string };
+			return body.error ? 'unresolvable' : 'collection';
+		}
+		const body = (await res.json()) as ExpandResponse;
+		return body.tracks.map((t) => ({
+			title: t.title,
+			artists: t.artists,
+			durationMs: t.durationMs ?? 0,
+			source: t.source.url
+		}));
 	};
 }
 
