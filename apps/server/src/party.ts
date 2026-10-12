@@ -1,4 +1,6 @@
 import {
+	CONFIRM_CHOICES,
+	CONFIRM_MS,
 	DEFAULT_SETTINGS,
 	GOVERNANCES,
 	NICKNAME_MAX,
@@ -21,6 +23,8 @@ export interface ResolvedTrack {
 	artists: string[];
 	durationMs: number;
 	candidates: Candidate[];
+	/** The matching service wasn't sure; the adder gets to pick. */
+	needsConfirmation?: boolean;
 }
 
 type Result = ErrorCode | null;
@@ -223,7 +227,8 @@ export class Party {
 			artists: track.artists,
 			durationMs: track.durationMs,
 			candidates: track.candidates,
-			candidateIndex: 0
+			candidateIndex: 0,
+			confirmBy: track.needsConfirmation && track.candidates.length > 1 ? now + CONFIRM_MS : undefined
 		});
 		guest.lastAddedAt = now;
 		this.lastActivity = now;
@@ -256,6 +261,28 @@ export class Party {
 		const res = this.resolve({ type: 'bump', by, item }, now);
 		if (res.kind !== 'apply') return 'not-allowed';
 		item.bumpedAt = now;
+		return null;
+	}
+
+	/** Picks which of an item's top candidates plays, queued or already playing. */
+	pick(by: GuestId, itemId: string, candidateIndex: number, now: number): Result {
+		const playing = this.nowPlaying?.item.id === itemId ? this.nowPlaying : null;
+		const item = playing?.item ?? this.queue.find((i) => i.id === itemId);
+		if (!item) return 'bad-request';
+		const choices = Math.min(CONFIRM_CHOICES, item.candidates.length);
+		if (!Number.isInteger(candidateIndex) || candidateIndex < 0 || candidateIndex >= choices) return 'bad-request';
+		const adderMayPick = item.addedBy === by && item.confirmBy !== undefined && now <= item.confirmBy;
+		if (!adderMayPick && !this.is(by, 'host')) return 'not-allowed';
+		delete item.confirmBy;
+		if (item.candidateIndex !== candidateIndex) {
+			item.candidateIndex = candidateIndex;
+			// The player loads the new video from the start.
+			if (playing) {
+				playing.positionMs = 0;
+				playing.positionAt = now;
+			}
+		}
+		this.lastActivity = now;
 		return null;
 	}
 

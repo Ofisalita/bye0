@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { DEFAULT_SETTINGS } from '@bye0/shared';
+import { CONFIRM_CHOICES, CONFIRM_MS, DEFAULT_SETTINGS } from '@bye0/shared';
 import { youtubeId } from './matching';
 import { Party, type ResolvedTrack } from './party';
 import { CODE_GRACE_MS, CODE_ROTATE_MS, PARTY_TTL_MS, Registry, WRONG_CODE_WINDOW_MS, WRONG_CODES_PER_WINDOW } from './registry';
@@ -109,6 +109,44 @@ describe('Party', () => {
 		expect(party.bump(beto, b1.id, 3)).toBe('not-allowed');
 		expect(party.bump(host, b1.id, 3)).toBeNull();
 		expect(party.state(4).queue.map((i) => i.title)).toEqual(['b1', 'a1']);
+	});
+
+	test('confirmation: the adder picks within the window, the host any time', () => {
+		const { party, host, ana, beto } = setup();
+		party.add(ana, { ...track('sure', 3), needsConfirmation: false }, 0);
+		party.add(ana, { ...track('one-choice', 1), needsConfirmation: true }, 0);
+		party.add(ana, { ...track('unsure', 5), needsConfirmation: true }, 1_000);
+		const byTitle = (title: string) => party.state(1_000).queue.find((i) => i.title === title);
+		const [sure, oneChoice, unsure] = ['sure', 'one-choice', 'unsure'].map(byTitle);
+		expect(sure!.confirmBy).toBeUndefined();
+		expect(oneChoice!.confirmBy).toBeUndefined();
+		expect(unsure!.confirmBy).toBe(1_000 + CONFIRM_MS);
+
+		expect(party.pick(beto, unsure!.id, 1, 2_000)).toBe('not-allowed');
+		expect(party.pick(ana, unsure!.id, CONFIRM_CHOICES, 2_000)).toBe('bad-request'); // only the top 3
+		expect(party.pick(ana, unsure!.id, 1.5, 2_000)).toBe('bad-request');
+		expect(party.pick(ana, sure!.id, 1, 2_000)).toBe('not-allowed'); // nothing to confirm
+		expect(party.pick(ana, unsure!.id, 2, 2_000)).toBeNull();
+		expect(unsure!.candidateIndex).toBe(2);
+		expect(unsure!.confirmBy).toBeUndefined();
+		expect(party.pick(ana, unsure!.id, 0, 2_001)).toBe('not-allowed'); // already settled
+
+		party.add(beto, { ...track('late', 3), needsConfirmation: true }, 0);
+		const late = party.state(0).queue.find((i) => i.title === 'late')!;
+		expect(party.pick(beto, late.id, 1, CONFIRM_MS + 1)).toBe('not-allowed'); // too late: the top one stays
+
+		expect(party.pick(host, late.id, 1, 60_000)).toBeNull();
+		expect(party.pick(host, sure!.id, 2, 60_000)).toBeNull();
+	});
+
+	test('picking another version of the playing song restarts it', () => {
+		const { party, host, ana } = setup();
+		party.start(host, 0);
+		party.add(ana, { ...track('a1', 3), needsConfirmation: true }, 1);
+		party.claimPlayer('conn-host');
+		party.heartbeat('conn-host', party.nowPlaying!.item.id, 4_000, false, 5_000);
+		expect(party.pick(ana, party.nowPlaying!.item.id, 1, 6_000)).toBeNull();
+		expect(party.nowPlaying).toMatchObject({ item: { candidateIndex: 1 }, positionMs: 0, positionAt: 6_000 });
 	});
 
 	test('player errors fall through candidates, then skip', () => {

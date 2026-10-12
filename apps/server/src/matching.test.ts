@@ -35,9 +35,10 @@ test('a Spotify track comes back with ranked candidates, unknowns as 0 / empty',
 		artists: ['Daft Punk'],
 		durationMs: 320357,
 		candidates: [
-			{ videoId: 'wU26xVT_vBU', title: 'One More Time', channel: 'Daft Punk', durationMs: 321000, kind: 'official_audio', confidence: 1 },
-			{ videoId: 'YVdy1rK9F1E', title: 'one more time', channel: '', durationMs: 0, kind: 'user_upload', confidence: 0.6 }
-		]
+			{ videoId: 'wU26xVT_vBU', title: 'One More Time', channel: 'Daft Punk', durationMs: 321000, kind: 'official_audio', confidence: 1, thumbnailUrl: 'x' },
+			{ videoId: 'YVdy1rK9F1E', title: 'one more time', channel: '', durationMs: 0, kind: 'user_upload', confidence: 0.6, thumbnailUrl: 'x' }
+		],
+		needsConfirmation: false
 	});
 });
 
