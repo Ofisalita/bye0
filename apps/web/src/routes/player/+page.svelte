@@ -8,6 +8,7 @@
 	import { loadYouTube } from '#lib/youtube.ts';
 
 	const HEARTBEAT_MS = 2_000;
+	const LAYOUT_KEY = 'bye0.playerLayout';
 
 	// Own connection: closing this view is what releases the Player role.
 	const party = new PartyClient();
@@ -20,6 +21,8 @@
 	let qr = $state('');
 	/** `${itemId}:${candidateIndex}` of what the iframe was last told to load. */
 	let loaded = '';
+	/** `video`: big video with a side rail. `queue`: small video, big queue. Kept per device. */
+	let layout = $state<'video' | 'queue'>(localStorage.getItem(LAYOUT_KEY) === 'queue' ? 'queue' : 'video');
 
 	const s = $derived(party.state);
 	const np = $derived(s?.nowPlaying ?? null);
@@ -79,6 +82,11 @@
 		party.close();
 	});
 
+	function switchLayout() {
+		layout = layout === 'video' ? 'queue' : 'video';
+		localStorage.setItem(LAYOUT_KEY, layout);
+	}
+
 	async function start() {
 		tapped = true;
 		party.send({ t: 'player.claim' });
@@ -113,7 +121,7 @@
 {:else if !s}
 	<main class="page"><p class="dim">{m.connecting()}</p></main>
 {:else}
-	<main class="stage">
+	<main class="stage" class:queue={layout === 'queue'}>
 		<!-- Nothing may be drawn over the video (YouTube's Required Minimum Functionality). -->
 		<div class="video">
 			<div class="frame" class:hidden={!active}><div bind:this={frame}></div></div>
@@ -130,44 +138,50 @@
 			{/if}
 		</div>
 
-		<aside class="rail">
-			<section>
-				<h2>{m.now_playing()}</h2>
-				{#if np}
-					<p><strong>{np.item.title}</strong></p>
-					<p class="dim">{np.item.artists.join(', ')}</p>
-				{:else}
-					<p class="dim">{m.nothing_playing()}</p>
-				{/if}
-			</section>
+		<section class="now">
+			<h2>{m.now_playing()}</h2>
+			{#if np}
+				<p><strong>{np.item.title}</strong></p>
+				<p class="dim">{np.item.artists.join(', ')}</p>
+			{:else}
+				<p class="dim">{m.nothing_playing()}</p>
+			{/if}
+		</section>
 
-			<section class="next">
-				<h2>{m.up_next()}</h2>
-				{#each s.queue as item (item.id)}
-					<p class="ellipsis">{item.title} <span class="dim">{item.artists.join(', ')}</span></p>
-				{:else}
-					<p class="dim">{m.queue_empty()}</p>
-				{/each}
-			</section>
+		<section class="next">
+			<h2>{m.up_next()}</h2>
+			{#each s.queue as item (item.id)}
+				<p class="ellipsis">{item.title} <span class="dim">{item.artists.join(', ')}</span></p>
+			{:else}
+				<p class="dim">{m.queue_empty()}</p>
+			{/each}
+		</section>
 
-			<section class="join">
-				{#if qr}<img src={qr} alt={joinUrl} />{/if}
-				<div>
-					<p class="dim">{m.player_join({ host: location.host })}</p>
-					<p class="code">{s.code}</p>
-				</div>
-			</section>
-		</aside>
+		<section class="join">
+			{#if qr}<img src={qr} alt={joinUrl} />{/if}
+			<div>
+				<p class="dim">{m.player_join({ host: location.host })}</p>
+				<p class="code">{s.code}</p>
+			</div>
+			<button class="small layout" onclick={switchLayout}>
+				{layout === 'video' ? m.player_layout_queue() : m.player_layout_video()}
+			</button>
+		</section>
 	</main>
 {/if}
 
 <style>
 	.stage {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) 340px;
+		grid-template:
+			'video now' auto
+			'video next' minmax(0, 1fr)
+			'video join' auto / minmax(0, 1fr) 340px;
 		height: 100dvh;
+		background: var(--surface);
 	}
 	.video {
+		grid-area: video;
 		position: relative;
 		background: #000;
 		min-height: 200px;
@@ -195,27 +209,27 @@
 		padding: 16px;
 		text-align: center;
 	}
-	.rail {
-		display: flex;
-		flex-direction: column;
-		gap: 24px;
-		padding: 20px;
-		background: var(--surface);
-		overflow: hidden;
-	}
-	.rail section {
+	section {
 		display: grid;
 		gap: 6px;
+		min-width: 0;
+		padding: 12px 20px;
+	}
+	.now {
+		grid-area: now;
+		padding-top: 20px;
 	}
 	.next {
-		flex: 1;
+		grid-area: next;
 		align-content: start;
 		overflow-y: auto;
 	}
 	.join {
+		grid-area: join;
 		grid-template-columns: 120px 1fr;
 		align-items: center;
 		gap: var(--gap);
+		padding-bottom: 20px;
 	}
 	.join img {
 		width: 120px;
@@ -226,14 +240,52 @@
 		font-weight: 700;
 		letter-spacing: 0.2em;
 	}
+	.layout {
+		grid-column: 1 / -1;
+	}
 
+	/* Small video, big queue. */
+	@media (orientation: landscape) {
+		.stage.queue {
+			/* 360px keeps a 16:9 video above the 200px YouTube asks for. */
+			grid-template:
+				'video next' auto
+				'now next' auto
+				'join next' minmax(0, 1fr) / minmax(360px, 30%) minmax(0, 1fr);
+		}
+		.queue .video {
+			aspect-ratio: 16 / 9;
+		}
+		.queue .next {
+			gap: 20px;
+			padding: 32px 40px;
+			background: var(--bg);
+			font-size: 2rem;
+			line-height: 1.2;
+		}
+		.queue .next .dim {
+			display: block;
+			font-size: 1.2rem;
+		}
+		.queue .join {
+			align-self: end;
+		}
+	}
+
+	/* One stacked layout, whichever is picked. */
 	@media (orientation: portrait) {
 		.stage {
-			grid-template-columns: 1fr;
-			grid-template-rows: auto minmax(0, 1fr);
+			grid-template:
+				'video' auto
+				'now' auto
+				'next' minmax(0, 1fr)
+				'join' auto / minmax(0, 1fr);
 		}
 		.video {
 			aspect-ratio: 16 / 9;
+		}
+		.layout {
+			display: none;
 		}
 	}
 </style>
