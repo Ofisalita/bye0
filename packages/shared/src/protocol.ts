@@ -11,6 +11,8 @@ export type ClientMessage =
 	| { t: 'skip' }
 	| { t: 'remove'; itemId: string }
 	| { t: 'bump'; itemId: string }
+	/** Two queued songs trade places. */
+	| { t: 'swap'; itemId: string; otherId: string }
 	/** Give a queued song your upvote, or take it back. */
 	| { t: 'upvote'; itemId: string }
 	/** Choose which candidate plays: the adder while `confirmBy` is open, the host any time. */

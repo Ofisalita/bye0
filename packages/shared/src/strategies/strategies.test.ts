@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { DEFAULT_SETTINGS, type Guest, type PartyContext, type QueueItem } from '../types';
-import { GOVERNANCES, HOT_HALF_LIFE_MS, ORDERINGS } from './index';
+import { canSwap, GOVERNANCES, HOT_HALF_LIFE_MS, ORDERINGS } from './index';
 
 const item = (id: string, addedBy: string, addedAt: number, upvotes: QueueItem['upvotes'] = {}): QueueItem => ({
 	id,
 	addedBy,
 	addedAt,
+	slot: addedAt,
 	title: id,
 	artists: [],
 	durationMs: 0,
@@ -69,6 +70,24 @@ describe('ordering', () => {
 		expect(ids(ORDERINGS['vote-ranked']!.order(voted, ctx([])))).toEqual(['old', 'fresh', 'none', 'none2']);
 	});
 
+	test('swaps: any two under fifo, a guest\'s own under round-robin, none elsewhere or once bumped', () => {
+		const [a1, a2, b1] = [item('a1', 'a', 1), item('a2', 'a', 2), item('b1', 'b', 3)];
+		const allowed = (id: string) => [canSwap(ORDERINGS[id]!, a1!, a2!), canSwap(ORDERINGS[id]!, a1!, b1!)];
+		expect(allowed('fifo')).toEqual([true, true]);
+		expect(allowed('round-robin')).toEqual([true, false]);
+		for (const id of ['vote-ranked', 'hot', 'shuffle']) expect(allowed(id)).toEqual([false, false]);
+		expect(canSwap(ORDERINGS.fifo!, a1!, a1!)).toBe(false);
+		expect(canSwap(ORDERINGS.fifo!, a1!, { ...a2!, bumpedAt: 5 })).toBe(false);
+	});
+
+	test('swapped slots move songs under fifo and round-robin', () => {
+		const swapped = queue.map((i) => ({ ...i }));
+		const [a1, a3] = [swapped[0]!, swapped[2]!];
+		[a1.slot, a3.slot] = [a3.slot, a1.slot];
+		expect(ids(ORDERINGS.fifo!.order(swapped, ctx([])))).toEqual(['a3', 'a2', 'a1', 'b1', 'c1', 'b2']);
+		expect(ids(ORDERINGS['round-robin']!.order(swapped, ctx([])))).toEqual(['a3', 'b1', 'c1', 'a2', 'b2', 'a1']);
+	});
+
 	test('shuffle: out of add order, yet the same every time and unmoved by new songs', () => {
 		const shuffled = ids(ORDERINGS.shuffle!.order(queue, ctx([])));
 		expect([...shuffled].sort()).toEqual(ids(queue).sort());
@@ -110,6 +129,18 @@ describe('governance', () => {
 		expect(g.handle({ type: 'remove', by: 'h', item: item('x', 'a', 0) }, ctx(guests)).kind).toBe('deny');
 		expect(g.handle({ type: 'remove', by: 'h', item: item('x', 'h', 0) }, ctx(guests)).kind).toBe('apply');
 		expect(g.handle({ type: 'bump', by: 'h', item: item('x', 'h', 0) }, ctx(guests)).kind).toBe('deny');
+	});
+
+	test('swap: everyone rearranges their own songs; other people\'s only where the mode says so', () => {
+		const mine = { type: 'swap', item: item('x', 'a', 0), other: item('y', 'a', 1) } as const;
+		const mixed = { type: 'swap', item: item('x', 'a', 0), other: item('y', 'b', 1) } as const;
+		const answers = (id: string, by: string) =>
+			[mine, mixed].map((intent) => GOVERNANCES[id]!.handle({ ...intent, by }, ctx(guests)).kind);
+		for (const id of ['dictatorship', 'full-democracy', 'presidential-democracy']) expect(answers(id, 'a')).toEqual(['apply', 'deny']);
+		expect(answers('full-democracy', 'h')).toEqual(['deny', 'deny']);
+		expect(answers('dictatorship', 'h')).toEqual(['apply', 'apply']);
+		expect(answers('presidential-democracy', 'h')).toEqual(['apply', 'apply']);
+		expect(answers('anarchy', 'b')).toEqual(['apply', 'apply']);
 	});
 
 	test('anarchy: anyone does anything, no vote', () => {

@@ -34,6 +34,8 @@
 	"queue_empty": "The queue is empty.",
 	"remove": "Remove",
 	"bump": "Play next",
+	"move_earlier": "Play earlier",
+	"move_later": "Play later",
 	"upvote": "Upvote",
 	"change_version": "Version",
 	"confirm_title": "Which one did you mean?",

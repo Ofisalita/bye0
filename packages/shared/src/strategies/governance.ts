@@ -1,5 +1,5 @@
 import type { GuestId, PartyContext } from '../types';
-import type { GovernanceMode, Resolution } from './types';
+import type { GovernanceMode, Intent, Resolution } from './types';
 
 const APPLY: Resolution = { kind: 'apply' };
 const NOT_ALLOWED: Resolution = { kind: 'deny', reason: 'not-allowed' };
@@ -7,19 +7,23 @@ const NOT_ALLOWED: Resolution = { kind: 'deny', reason: 'not-allowed' };
 const isHost = (id: GuestId, ctx: PartyContext) =>
 	ctx.guests.some((g) => g.id === id && g.role === 'host');
 
+/** Taking back your own song, or two of your own songs trading places: nobody else is affected. */
+const onlyTheirOwn = (intent: Intent) =>
+	(intent.type === 'remove' && intent.item.addedBy === intent.by) ||
+	(intent.type === 'swap' && intent.item.addedBy === intent.by && intent.other.addedBy === intent.by);
+
 /** Votes needed to skip: a fraction of the guests currently connected, at least 1. */
 export function skipVotesNeeded(ctx: PartyContext): number {
 	const active = ctx.guests.filter((g) => g.connected).length;
 	return Math.max(1, Math.ceil(active * ctx.settings.skipThreshold));
 }
 
-/** Host only. Guests may still take back their own songs. */
+/** Host only. Guests may still take back or rearrange their own songs. */
 export const dictatorship: GovernanceMode = {
 	id: 'dictatorship',
 	handle(intent, ctx) {
 		if (isHost(intent.by, ctx)) return APPLY;
-		if (intent.type === 'remove' && intent.item.addedBy === intent.by) return APPLY;
-		return NOT_ALLOWED;
+		return onlyTheirOwn(intent) ? APPLY : NOT_ALLOWED;
 	}
 };
 
@@ -33,7 +37,8 @@ const byVote: GovernanceMode['handle'] = (intent, ctx) => {
 			return { kind: 'vote', have: np.skipVotes.length + 1, needed: skipVotesNeeded(ctx) };
 		}
 		case 'remove':
-			return intent.item.addedBy === intent.by ? APPLY : NOT_ALLOWED;
+		case 'swap':
+			return onlyTheirOwn(intent) ? APPLY : NOT_ALLOWED;
 		case 'bump':
 			return NOT_ALLOWED;
 	}
@@ -46,14 +51,14 @@ export const fullDemocracy: GovernanceMode = {
 	handle: byVote
 };
 
-/** Guests vote, but the host can skip, remove and bump without asking. */
+/** Guests vote, but the host can skip, remove, bump and swap without asking. */
 export const presidentialDemocracy: GovernanceMode = {
 	id: 'presidential-democracy',
 	votesToSkip: true,
 	handle: (intent, ctx) => (isHost(intent.by, ctx) ? APPLY : byVote(intent, ctx))
 };
 
-/** No rules: anyone skips, removes or bumps any song, right away. */
+/** No rules: anyone skips, removes, bumps or swaps any song, right away. */
 export const anarchy: GovernanceMode = {
 	id: 'anarchy',
 	handle: () => APPLY
