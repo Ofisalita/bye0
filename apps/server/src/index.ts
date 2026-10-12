@@ -6,7 +6,6 @@ import { Registry } from './registry';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const MATCHING_URL = process.env.MATCHING_URL;
-const JOIN_ATTEMPTS_PER_MINUTE = 10;
 const MAX_INPUT_LENGTH = 500;
 
 interface Conn {
@@ -20,7 +19,6 @@ type Socket = ServerWebSocket<Conn>;
 const registry = new Registry();
 const resolveTrack = MATCHING_URL ? matchingService(MATCHING_URL) : youtubeOnly;
 const sockets = new Map<string, Socket>();
-const joinAttempts = new Map<string, number>();
 
 const topic = (party: Party) => `party:${party.id}`;
 const send = (ws: Socket, msg: ServerMessage) => ws.send(JSON.stringify(msg));
@@ -61,11 +59,8 @@ function handleEntry(ws: Socket, msg: ClientMessage) {
 			return enter(ws, party, host.id);
 		}
 		case 'join': {
-			const attempts = (joinAttempts.get(ws.data.ip) ?? 0) + 1;
-			joinAttempts.set(ws.data.ip, attempts);
-			if (attempts > JOIN_ATTEMPTS_PER_MINUTE) return fail(ws, 'rate-limited');
-			const party = registry.byCode(String(msg.code), now);
-			if (!party) return fail(ws, 'bad-code');
+			const party = registry.join(String(msg.code), ws.data.ip, now);
+			if (typeof party === 'string') return fail(ws, party);
 			const guest = party.join(msg.token, msg.nickname, now);
 			if (typeof guest === 'string') return fail(ws, guest);
 			return enter(ws, party, guest.id);
@@ -191,6 +186,5 @@ setInterval(() => {
 	rotated.forEach(broadcast);
 	for (const party of expired) server.publish(topic(party), JSON.stringify({ t: 'ended' } satisfies ServerMessage));
 }, 5_000);
-setInterval(() => joinAttempts.clear(), 60_000);
 
 console.log(`bye0 room server on :${server.port} (${MATCHING_URL ? `matching: ${MATCHING_URL}` : 'no MATCHING_URL: YouTube links only'})`);
