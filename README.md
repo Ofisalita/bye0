@@ -35,11 +35,23 @@ you can change the rules mid-party. "who decides" has four settings:
 whatever the rules, you can kick people, and make a friend co-host so their device can take over the music
 if yours dies.
 
+on a wide screen, **Bigger queue** shrinks the video and gives the room to the list of upcoming songs.
+**Bigger video** switches back.
+
 **if you're a guest**
 
 1. scan the QR code (or open bye0 and type the code), then pick a nickname.
 2. paste a song link and hit **Add**.
 3. watch the queue, vote to skip, take back your own songs if you change your mind.
+
+you can also send songs straight from your music app, once you've joined:
+
+- **Android**: install bye0 from the browser menu (**Add to Home screen** / **Install app**). after that,
+  **Share → bye0** in Spotify, YouTube Music and the like adds the song.
+- **iPhone**: Safari can't do that, so make a shortcut once in the Shortcuts app: turn on **Show in Share
+  Sheet**, add **URL Encode** on the shortcut input, then **Open URLs** with
+  `https://<where bye0 lives>/share?url=` followed by the encoded text. it opens bye0 in Safari, so join the
+  party in Safari too.
 
 ## Good to know
 
@@ -58,6 +70,7 @@ bye0 is in early development.
 |---|---|
 | YouTube and YouTube Music links | ✅ |
 | Spotify song links | ✅ if you also run the matching service (see below) |
+| choosing the right version when the match is unsure | ✅ (with the matching service) |
 | Spotify albums and playlists | 🚧 coming next |
 | Apple Music, Deezer, Tidal links | 🚧 coming next |
 | searching for a song by name | 🚧 |

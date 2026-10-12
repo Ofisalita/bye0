@@ -4,6 +4,7 @@ import { matchingService, type Resolver } from './matching';
 const SPOTIFY = 'https://open.spotify.com/track/0DiWol3AO6WpXZgp0goxAV';
 const ALBUM = 'https://open.spotify.com/album/2noRn2Aes5aoNVsU6iWThc';
 const YOUTUBE = 'https://youtu.be/FGBhQbmPwH8';
+const LIVE = 'https://www.youtube.com/live/jfKfPfyJRdk';
 
 /** Answers like nidol's walking skeleton does. */
 const nidol = Bun.serve({
@@ -17,6 +18,12 @@ const nidol = Bun.serve({
 					{ videoId: 'wU26xVT_vBU', title: 'One More Time', channel: 'Daft Punk', durationMs: 321000, kind: 'official_audio', thumbnailUrl: 'x', confidence: 1 },
 					{ videoId: 'YVdy1rK9F1E', title: 'one more time', channel: null, durationMs: null, kind: 'user_upload', thumbnailUrl: 'x', confidence: 0.6 }
 				],
+				needsConfirmation: false
+			});
+		if (input === LIVE)
+			return Response.json({
+				canonical: { title: 'lofi hip hop radio', artists: ['Lofi Girl'], durationMs: null, isLive: true },
+				candidates: [{ videoId: 'jfKfPfyJRdk', title: 'lofi hip hop radio', channel: 'Lofi Girl', durationMs: null, kind: 'other', thumbnailUrl: 'x', confidence: 1 }],
 				needsConfirmation: false
 			});
 		if (input === ALBUM) return Response.json({ error: 'collection_input', kind: 'album' }, { status: 409 });
@@ -35,10 +42,16 @@ test('a Spotify track comes back with ranked candidates, unknowns as 0 / empty',
 		artists: ['Daft Punk'],
 		durationMs: 320357,
 		candidates: [
-			{ videoId: 'wU26xVT_vBU', title: 'One More Time', channel: 'Daft Punk', durationMs: 321000, kind: 'official_audio', confidence: 1 },
-			{ videoId: 'YVdy1rK9F1E', title: 'one more time', channel: '', durationMs: 0, kind: 'user_upload', confidence: 0.6 }
-		]
+			{ videoId: 'wU26xVT_vBU', title: 'One More Time', channel: 'Daft Punk', durationMs: 321000, kind: 'official_audio', confidence: 1, thumbnailUrl: 'x' },
+			{ videoId: 'YVdy1rK9F1E', title: 'one more time', channel: '', durationMs: 0, kind: 'user_upload', confidence: 0.6, thumbnailUrl: 'x' }
+		],
+		needsConfirmation: false,
+		isLive: undefined
 	});
+});
+
+test('a live stream says so', async () => {
+	expect(await resolve(LIVE)).toMatchObject({ durationMs: 0, isLive: true });
 });
 
 test('errors: collections, outages and everything else', async () => {

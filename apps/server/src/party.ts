@@ -1,4 +1,6 @@
 import {
+	CONFIRM_CHOICES,
+	CONFIRM_MS,
 	DEFAULT_SETTINGS,
 	GOVERNANCES,
 	NICKNAME_MAX,
@@ -21,6 +23,10 @@ export interface ResolvedTrack {
 	artists: string[];
 	durationMs: number;
 	candidates: Candidate[];
+	/** The matching service wasn't sure; the adder gets to pick. */
+	needsConfirmation?: boolean;
+	/** A live stream: no duration, and it never ends on its own. */
+	isLive?: boolean;
 }
 
 type Result = ErrorCode | null;
@@ -106,7 +112,14 @@ export class Party {
 			existing.nickname = name;
 			return existing;
 		}
-		const guest: Guest = { id: crypto.randomUUID(), nickname: name, role, connected: false, joinedAt: now };
+		const guest: Guest = {
+			id: crypto.randomUUID(),
+			nickname: name,
+			role,
+			connected: false,
+			joinedAt: now,
+			lastAddedAt: null
+		};
 		this.guests.set(guest.id, guest);
 		this.tokens.set(token, guest.id);
 		return guest;
@@ -164,7 +177,8 @@ export class Party {
 			!(next.skipThreshold > 0 && next.skipThreshold <= 1) ||
 			typeof next.showAttribution !== 'boolean' ||
 			!posOrNull(next.maxDurationMs) ||
-			!posOrNull(next.maxQueuedPerGuest)
+			!posOrNull(next.maxQueuedPerGuest) ||
+			!posOrNull(next.addCooldownMs)
 		)
 			return 'bad-request';
 		// Copy field by field so unknown keys in a client's patch are dropped.
@@ -174,7 +188,8 @@ export class Party {
 			skipThreshold: next.skipThreshold,
 			showAttribution: next.showAttribution,
 			maxDurationMs: next.maxDurationMs,
-			maxQueuedPerGuest: next.maxQueuedPerGuest
+			maxQueuedPerGuest: next.maxQueuedPerGuest,
+			addCooldownMs: next.addCooldownMs
 		};
 		return null;
 	}
@@ -189,19 +204,23 @@ export class Party {
 	}
 
 	/** Cheap check to run before spending a matching-service call. */
-	canAdd(by: GuestId): Result {
+	canAdd(by: GuestId, now: number): Result {
+		const cooldown = this.settings.addCooldownMs;
+		const last = this.guests.get(by)?.lastAddedAt ?? null;
+		if (cooldown !== null && last !== null && now - last < cooldown) return 'cooldown';
 		const max = this.settings.maxQueuedPerGuest;
 		if (max !== null && this.queue.filter((i) => i.addedBy === by).length >= max) return 'queue-limit';
 		return null;
 	}
 
 	add(by: GuestId, track: ResolvedTrack, now: number): Result {
-		if (!this.guests.has(by)) return 'not-allowed';
-		const limited = this.canAdd(by);
+		const guest = this.guests.get(by);
+		if (!guest) return 'not-allowed';
+		const limited = this.canAdd(by, now);
 		if (limited) return limited;
 		if (!track.candidates.length) return 'unresolvable';
 		const max = this.settings.maxDurationMs;
-		if (max !== null && track.durationMs > max) return 'too-long';
+		if (max !== null && (track.isLive || track.durationMs > max)) return 'too-long';
 		this.queue.push({
 			id: crypto.randomUUID(),
 			addedBy: by,
@@ -210,8 +229,10 @@ export class Party {
 			artists: track.artists,
 			durationMs: track.durationMs,
 			candidates: track.candidates,
-			candidateIndex: 0
+			candidateIndex: 0,
+			confirmBy: track.needsConfirmation && track.candidates.length > 1 ? now + CONFIRM_MS : undefined
 		});
+		guest.lastAddedAt = now;
 		this.lastActivity = now;
 		if (this.started && !this.nowPlaying) this.advance(now);
 		return null;
@@ -242,6 +263,28 @@ export class Party {
 		const res = this.resolve({ type: 'bump', by, item }, now);
 		if (res.kind !== 'apply') return 'not-allowed';
 		item.bumpedAt = now;
+		return null;
+	}
+
+	/** Picks which of an item's top candidates plays, queued or already playing. */
+	pick(by: GuestId, itemId: string, candidateIndex: number, now: number): Result {
+		const playing = this.nowPlaying?.item.id === itemId ? this.nowPlaying : null;
+		const item = playing?.item ?? this.queue.find((i) => i.id === itemId);
+		if (!item) return 'bad-request';
+		const choices = Math.min(CONFIRM_CHOICES, item.candidates.length);
+		if (!Number.isInteger(candidateIndex) || candidateIndex < 0 || candidateIndex >= choices) return 'bad-request';
+		const adderMayPick = item.addedBy === by && item.confirmBy !== undefined && now <= item.confirmBy;
+		if (!adderMayPick && !this.is(by, 'host')) return 'not-allowed';
+		delete item.confirmBy;
+		if (item.candidateIndex !== candidateIndex) {
+			item.candidateIndex = candidateIndex;
+			// The player loads the new video from the start.
+			if (playing) {
+				playing.positionMs = 0;
+				playing.positionAt = now;
+			}
+		}
+		this.lastActivity = now;
 		return null;
 	}
 

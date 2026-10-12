@@ -25,15 +25,17 @@ export function youtubeId(input: string): string | null {
 
 /** The parts of nidol's `POST /resolve` response we use (contract: MATCHING_SERVICE.md in Ofisalita/nidol). */
 interface ResolveResponse {
-	canonical: { title: string; artists: string[]; durationMs: number | null };
+	canonical: { title: string; artists: string[]; durationMs: number | null; isLive?: boolean };
 	candidates: {
 		videoId: string;
 		title: string;
 		channel: string | null;
 		durationMs: number | null;
 		kind: string;
+		thumbnailUrl: string;
 		confidence: number;
 	}[];
+	needsConfirmation: boolean;
 }
 
 async function askNidol(baseUrl: string, input: string): Promise<ResolvedTrack | ErrorCode> {
@@ -48,7 +50,6 @@ async function askNidol(baseUrl: string, input: string): Promise<ResolvedTrack |
 	if (res.status >= 500) return 'matching-unavailable';
 	if (!res.ok) return 'unresolvable';
 	const body = (await res.json()) as ResolveResponse;
-	// TODO: `needsConfirmation` should open the QTE prompt (SPEC §4); for now the top candidate wins.
 	return {
 		title: body.canonical.title,
 		artists: body.canonical.artists,
@@ -59,8 +60,11 @@ async function askNidol(baseUrl: string, input: string): Promise<ResolvedTrack |
 			channel: c.channel ?? '',
 			durationMs: c.durationMs ?? 0,
 			kind: c.kind,
-			confidence: c.confidence
-		}))
+			confidence: c.confidence,
+			thumbnailUrl: c.thumbnailUrl
+		})),
+		needsConfirmation: body.needsConfirmation,
+		isLive: body.canonical.isLive
 	};
 }
 

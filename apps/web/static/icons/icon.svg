@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+	<!-- Full bleed, with the record inside the 80% safe zone, so one file works as a maskable icon too. -->
+	<rect width="512" height="512" fill="#111318" />
+	<circle cx="256" cy="256" r="168" fill="#ff5c8a" />
+	<g fill="none" stroke="#111318" stroke-opacity="0.35" stroke-width="5">
+		<circle cx="256" cy="256" r="140" />
+		<circle cx="256" cy="256" r="112" />
+		<circle cx="256" cy="256" r="84" />
+	</g>
+	<circle cx="256" cy="256" r="56" fill="#111318" />
+	<circle cx="256" cy="256" r="12" fill="#ff5c8a" />
+</svg>

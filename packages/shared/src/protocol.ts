@@ -11,6 +11,8 @@ export type ClientMessage =
 	| { t: 'skip' }
 	| { t: 'remove'; itemId: string }
 	| { t: 'bump'; itemId: string }
+	/** Choose which candidate plays: the adder while `confirmBy` is open, the host any time. */
+	| { t: 'pick'; itemId: string; candidateIndex: number }
 	| { t: 'settings'; patch: Partial<PartySettings> }
 	| { t: 'role'; guestId: GuestId; role: Exclude<Role, 'host'> }
 	| { t: 'kick'; guestId: GuestId }
@@ -34,7 +36,8 @@ export type ErrorCode =
 	| 'collection'
 	| 'matching-unavailable'
 	| 'too-long'
-	| 'queue-limit';
+	| 'queue-limit'
+	| 'cooldown';
 
 export type ServerMessage =
 	| { t: 'welcome'; you: GuestId; state: PartyState }
@@ -46,3 +49,6 @@ export type ServerMessage =
 export const CODE_ALPHABET = 'ACDEFGHJKLMNPRTUVWXY';
 export const CODE_LENGTH = 4;
 export const NICKNAME_MAX = 24;
+/** How long the adder has to pick when the match is uncertain, and how many candidates they see. */
+export const CONFIRM_MS = 10_000;
+export const CONFIRM_CHOICES = 3;
