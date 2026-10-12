@@ -1,6 +1,6 @@
 import type { ClientMessage, ErrorCode, ServerMessage } from '@bye0/shared';
 import type { ServerWebSocket } from 'bun';
-import { collectionExpander, matchingService, youtubeOnly } from './matching';
+import { collectionExpander, matchingService, songSearch, youtubeOnly } from './matching';
 import { Party } from './party';
 import { PARTY_TTL_MS, Registry } from './registry';
 import { memoryOnly, redisStore } from './store';
@@ -22,6 +22,8 @@ interface Conn {
 	ip: string;
 	partyId?: string;
 	guestId?: string;
+	/** A search from this connection is waiting on the matching service. */
+	searching?: boolean;
 }
 type Socket = ServerWebSocket<Conn>;
 
@@ -36,6 +38,7 @@ try {
 }
 const resolveTrack = MATCHING_URL ? matchingService(MATCHING_URL, { country: MATCHING_COUNTRY }) : youtubeOnly;
 const expandCollection = MATCHING_URL ? collectionExpander(MATCHING_URL) : null;
+const search = MATCHING_URL ? songSearch(MATCHING_URL, { country: MATCHING_COUNTRY }) : null;
 const sockets = new Map<string, Socket>();
 /** Ids of album/playlist songs being looked up right now. */
 const lookingUp = new Set<string>();
@@ -157,6 +160,21 @@ async function handle(ws: Socket, msg: ClientMessage) {
 			}
 			if (typeof track === 'string') return fail(ws, track);
 			return done(party.add(me, track, Date.now()));
+		}
+		case 'search': {
+			if (typeof msg.q !== 'string' || !msg.q.trim() || msg.q.length > MAX_INPUT_LENGTH) return fail(ws, 'bad-request');
+			if (!search) return fail(ws, 'matching-unavailable');
+			// One at a time per tab, so typing fast can't flood the matching service.
+			if (ws.data.searching) return fail(ws, 'rate-limited');
+			ws.data.searching = true;
+			const results = await search(msg.q.trim())
+				.catch((err): ErrorCode => {
+					console.error('search failed:', err);
+					return 'matching-unavailable';
+				})
+				.finally(() => (ws.data.searching = false));
+			if (typeof results === 'string') return fail(ws, results);
+			return send(ws, { t: 'search.results', q: msg.q, results });
 		}
 		case 'skip':
 			return done(party.skip(me, now));

@@ -94,6 +94,16 @@ export interface PartyContext {
 	now: number;
 }
 
+/** A song found by name; adding it means adding its `url`. */
+export interface SearchResult {
+	title: string;
+	artists: string[];
+	/** 0 when unknown. */
+	durationMs: number;
+	artworkUrl?: string;
+	url: string;
+}
+
 /** What every client receives. */
 export interface PartyState {
 	id: string;
