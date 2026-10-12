@@ -1,0 +1,152 @@
+import { describe, expect, test } from 'bun:test';
+import { youtubeId } from './matching';
+import { Party, type ResolvedTrack } from './party';
+import { CODE_GRACE_MS, CODE_ROTATE_MS, PARTY_TTL_MS, Registry } from './registry';
+
+const track = (title: string, candidates = 1, durationMs = 180_000): ResolvedTrack => ({
+	title,
+	artists: ['x'],
+	durationMs,
+	candidates: Array.from({ length: candidates }, (_, i) => ({ videoId: `${title}-${i}`, title, channel: 'x', durationMs }))
+});
+
+function setup(settings = {}) {
+	const party = new Party(0, settings);
+	const id = (token: string, role: 'host' | 'guest' = 'guest') => {
+		const g = party.join(token, token, 0, role);
+		if (typeof g === 'string') throw new Error(g);
+		party.connect(`conn-${token}`, g.id, 0);
+		return g.id;
+	};
+	return { party, host: id('host', 'host'), ana: id('ana'), beto: id('beto') };
+}
+
+describe('Party', () => {
+	test('nothing plays until the host starts; then the queue drains in order', () => {
+		const { party, host, ana, beto } = setup();
+		party.add(ana, track('a1'), 1);
+		party.add(ana, track('a2'), 2);
+		party.add(beto, track('b1'), 3);
+		expect(party.nowPlaying).toBeNull();
+		expect(party.start(ana, 4)).toBe('not-allowed');
+		expect(party.start(host, 4)).toBeNull();
+		expect(party.nowPlaying?.item.title).toBe('a1');
+		// round-robin: beto's first goes before ana's second
+		expect(party.state(5).queue.map((i) => i.title)).toEqual(['b1', 'a2']);
+	});
+
+	test('a song added to an empty started party plays right away', () => {
+		const { party, host, ana } = setup();
+		party.start(host, 0);
+		party.add(ana, track('a1'), 1);
+		expect(party.nowPlaying?.item.title).toBe('a1');
+	});
+
+	test('democracy: votes accumulate and reset with the next song', () => {
+		const { party, host, ana, beto } = setup({ skipThreshold: 0.6 }); // 3 connected → 2 votes
+		party.start(host, 0);
+		party.add(ana, track('a1'), 1);
+		party.add(ana, track('a2'), 2);
+		expect(party.skip(ana, 3)).toBeNull();
+		expect(party.nowPlaying?.item.title).toBe('a1');
+		expect(party.skip(ana, 3)).toBe('already-voted');
+		expect(party.skip(beto, 4)).toBeNull();
+		expect(party.nowPlaying?.item.title).toBe('a2');
+		expect(party.nowPlaying?.skipVotes).toEqual([]);
+	});
+
+	test('guards: duration and per-guest limit', () => {
+		const { party, ana } = setup({ maxDurationMs: 60_000, maxQueuedPerGuest: 1 });
+		expect(party.add(ana, track('long'), 1)).toBe('too-long');
+		expect(party.add(ana, track('ok', 1, 30_000), 1)).toBeNull();
+		expect(party.add(ana, track('ok2', 1, 30_000), 1)).toBe('queue-limit');
+	});
+
+	test('bump puts a song first; only the host may under democracy', () => {
+		const { party, host, ana, beto } = setup();
+		party.add(ana, track('a1'), 1);
+		party.add(beto, track('b1'), 2);
+		const b1 = party.state(3).queue[1]!;
+		expect(party.bump(beto, b1.id, 3)).toBe('not-allowed');
+		expect(party.bump(host, b1.id, 3)).toBeNull();
+		expect(party.state(4).queue.map((i) => i.title)).toEqual(['b1', 'a1']);
+	});
+
+	test('player errors fall through candidates, then skip', () => {
+		const { party, host, ana } = setup();
+		party.start(host, 0);
+		party.add(ana, track('a1', 2), 1);
+		party.add(ana, track('a2'), 2);
+		const itemId = party.nowPlaying!.item.id;
+		expect(party.playerError('conn-host', itemId, 3)).toBe(false); // not the player yet
+		expect(party.claimPlayer('conn-ana')).toBe('not-allowed');
+		expect(party.claimPlayer('conn-host')).toBeNull();
+		expect(party.playerError('conn-host', itemId, 3)).toBe(true);
+		expect(party.nowPlaying?.item.candidateIndex).toBe(1);
+		expect(party.playerError('conn-host', itemId, 4)).toBe(true);
+		expect(party.nowPlaying?.item.title).toBe('a2');
+	});
+
+	test('handoff: position survives the player dropping, a co-host can take over', () => {
+		const { party, host, ana } = setup();
+		party.start(host, 0);
+		party.add(ana, track('a1'), 1);
+		party.claimPlayer('conn-host');
+		party.heartbeat('conn-host', party.nowPlaying!.item.id, 42_000, false, 50_000);
+		party.disconnect('conn-host');
+		expect(party.state(51_000).playerId).toBeNull();
+		expect(party.nowPlaying).toMatchObject({ positionMs: 42_000, positionAt: 50_000 });
+		party.setRole(host, ana, 'cohost');
+		expect(party.claimPlayer('conn-ana')).toBeNull();
+		expect(party.state(52_000).playerId).toBe(ana);
+	});
+
+	test('kick bans the device and drops its songs', () => {
+		const { party, host, ana } = setup();
+		party.add(ana, track('a1'), 1);
+		expect(party.kick(ana, host)).toBe('not-allowed');
+		expect(party.kick(host, ana)).toEqual(['conn-ana']);
+		expect(party.state(2).queue).toEqual([]);
+		expect(party.join('ana', 'ana again', 3)).toBe('banned');
+	});
+
+	test('settings: host only, validated', () => {
+		const { party, host, ana } = setup();
+		expect(party.patchSettings({ ordering: 'fifo' }, ana)).toBe('not-allowed');
+		expect(party.patchSettings({ ordering: 'nope' }, host)).toBe('bad-request');
+		expect(party.patchSettings({ ordering: 'fifo', governance: 'dictatorship' }, host)).toBeNull();
+		expect(party.settings.ordering).toBe('fifo');
+	});
+});
+
+describe('Registry', () => {
+	test('codes rotate with a grace period, stale parties expire', () => {
+		const reg = new Registry();
+		const party = reg.create(0);
+		const first = party.code;
+		expect(reg.byCode(first.toLowerCase(), 1)).toBe(party);
+
+		expect(reg.tick(CODE_ROTATE_MS).rotated).toEqual([party]);
+		expect(party.code).not.toBe(first);
+		expect(reg.byCode(first, CODE_ROTATE_MS + 1)).toBe(party);
+		expect(reg.byCode(first, CODE_ROTATE_MS + CODE_GRACE_MS + 1)).toBeUndefined();
+		expect(reg.byCode(party.code, CODE_ROTATE_MS + CODE_GRACE_MS + 1)).toBe(party);
+
+		expect(reg.tick(PARTY_TTL_MS + 1).expired).toEqual([party]);
+		expect(reg.get(party.id)).toBeUndefined();
+	});
+});
+
+test('youtubeId', () => {
+	const id = 'FGBhQbmPwH8';
+	for (const url of [
+		`https://www.youtube.com/watch?v=${id}&t=10s`,
+		`https://music.youtube.com/watch?v=${id}&si=abc`,
+		`https://youtu.be/${id}?si=abc`,
+		`https://m.youtube.com/shorts/${id}`,
+		`https://www.youtube.com/embed/${id}`
+	])
+		expect(youtubeId(url)).toBe(id);
+	for (const bad of ['one more time', 'https://open.spotify.com/track/0DiWol3AO6WpXZgp0goxAV', 'https://youtube.com/watch?v=short'])
+		expect(youtubeId(bad)).toBeNull();
+});
