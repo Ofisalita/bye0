@@ -362,6 +362,25 @@ describe('Party', () => {
 		expect(restored.join('cata', 'cata', 9, 'guest', '203.0.113.7')).toMatchObject({ nickname: 'cata' });
 	});
 
+	test('a restored party keeps its swaps, and new songs still go to the back', () => {
+		const { party, ana } = setup({ ordering: 'fifo' });
+		for (const [i, title] of ['a1', 'a2', 'a3'].entries()) party.add(ana, track(title), i);
+		const [a1, , a3] = party.state(3).queue;
+		party.swap(ana, a1!.id, a3!.id, 3);
+		const snapshot = JSON.parse(JSON.stringify(party.snapshot()));
+		const titles = (p: Party) => p.state(9).queue.map((i) => i.title);
+
+		const restored = Party.restore(structuredClone(snapshot));
+		restored.add(restored.guestByToken('ana')!.id, track('a4'), 4);
+		expect(titles(restored)).toEqual(['a3', 'a2', 'a1', 'a4']);
+
+		// Saved before songs had slots: they line up in add order.
+		for (const item of snapshot.queue) delete item.slot;
+		const older = Party.restore(snapshot);
+		older.add(older.guestByToken('ana')!.id, track('a4'), 4);
+		expect(titles(older)).toEqual(['a1', 'a2', 'a3', 'a4']);
+	});
+
 	test('a player coming back only takes the role if nobody else has it', () => {
 		const { party, host } = setup();
 		party.connect('conn-host-tv', host, 0);

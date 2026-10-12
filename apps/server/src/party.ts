@@ -139,6 +139,9 @@ export class Party {
 		party.tokens = new Map(s.tokens);
 		party.banned = new Set(s.banned);
 		party.queue = s.queue;
+		// A snapshot from before songs had slots: add order gives them theirs.
+		[...party.queue].sort((a, b) => a.addedAt - b.addedAt).forEach((item, i) => (item.slot ??= i));
+		party.nextSlot = Math.max(-1, ...party.queue.map((i) => i.slot)) + 1;
 		party.lastPlayedAt = s.lastPlayedAt;
 		party.hostIps = new Set(s.hostIps);
 		return party;
@@ -380,8 +383,8 @@ export class Party {
 			this.queue.push({
 				id: crypto.randomUUID(),
 				addedBy: by,
-				// A millisecond apart, so orderings that sort by add time keep the album's order.
-				addedAt: now + i,
+				addedAt: now,
+				slot: this.nextSlot++,
 				title: t.title,
 				artists: t.artists,
 				durationMs: t.durationMs,
