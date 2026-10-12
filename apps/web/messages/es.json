@@ -43,6 +43,11 @@
 	"governance_presidential_democracy": "Democracia presidencial (el anfitrión puede imponerse)",
 	"skip_threshold": "Votos necesarios para saltar: {percent}%",
 	"show_attribution": "Mostrar quién agregó cada canción",
+	"add_cooldown": "Tiempo entre canciones de una misma persona",
+	"add_cooldown_off": "Sin espera",
+	"add_cooldown_wait": "Puedes agregar otra canción en {seconds} s.",
+	"seconds": "{n} s",
+	"minutes": "{n} min",
 	"guests": "Invitados",
 	"role_host": "anfitrión",
 	"role_cohost": "coanfitrión",
@@ -70,5 +75,6 @@
 	"error_collection": "Los álbumes y las playlists aún no funcionan. Pega una sola canción.",
 	"error_matching_unavailable": "No podemos buscar esa canción ahora. Pega un enlace de YouTube.",
 	"error_too_long": "Esa es demasiado larga para esta fiesta.",
-	"error_queue_limit": "Ya tienes suficientes canciones en cola. Espera a que suene una."
+	"error_queue_limit": "Ya tienes suficientes canciones en cola. Espera a que suene una.",
+	"error_cooldown": "Espera un poco antes de agregar otra canción."
 }

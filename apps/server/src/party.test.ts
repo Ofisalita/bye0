@@ -63,6 +63,17 @@ describe('Party', () => {
 		expect(party.add(ana, track('ok2', 1, 30_000), 1)).toBe('queue-limit');
 	});
 
+	test('cooldown: a guest waits between songs; failed adds and other guests are not held up', () => {
+		const { party, ana, beto } = setup({ addCooldownMs: 30_000, maxDurationMs: 60_000 });
+		expect(party.add(ana, track('long'), 0)).toBe('too-long');
+		expect(party.add(ana, track('a1', 1, 30_000), 1)).toBeNull();
+		expect(party.canAdd(ana, 30_000)).toBe('cooldown');
+		expect(party.add(ana, track('a2', 1, 30_000), 30_000)).toBe('cooldown');
+		expect(party.add(beto, track('b1', 1, 30_000), 30_000)).toBeNull();
+		expect(party.add(ana, track('a2', 1, 30_000), 30_001)).toBeNull();
+		expect(party.state(30_002).guests.find((g) => g.id === ana)?.lastAddedAt).toBe(30_001);
+	});
+
 	test('full democracy: the host cannot skip, remove or bump alone', () => {
 		const { party, host, ana, beto } = setup({ skipThreshold: 1 }); // 3 connected → 3 votes
 		party.start(host, 0);
@@ -150,6 +161,9 @@ describe('Party', () => {
 			expect(party.patchSettings({ governance: id }, host)).toBe('bad-request');
 		}
 		expect(party.patchSettings({ skipThreshold: '0.5' as unknown as number }, host)).toBe('bad-request');
+		expect(party.patchSettings({ addCooldownMs: -1 }, host)).toBe('bad-request');
+		expect(party.patchSettings({ addCooldownMs: 30_000 }, host)).toBeNull();
+		expect(party.patchSettings({ addCooldownMs: null }, host)).toBeNull();
 	});
 
 	test('a party created with bogus settings falls back to the defaults and still works', () => {
