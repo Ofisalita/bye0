@@ -160,6 +160,7 @@ export class Party {
 		if (
 			!ORDERINGS[next.ordering] ||
 			!GOVERNANCES[next.governance] ||
+			typeof next.skipThreshold !== 'number' ||
 			!(next.skipThreshold > 0 && next.skipThreshold <= 1) ||
 			typeof next.showAttribution !== 'boolean' ||
 			!posOrNull(next.maxDurationMs) ||

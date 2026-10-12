@@ -6,6 +6,12 @@ export const CODE_ROTATE_MS = 5 * 60_000;
 export const CODE_GRACE_MS = 60_000;
 /** Safety net: a party nobody touched for this long is deleted. */
 export const PARTY_TTL_MS = 6 * 60 * 60_000;
+/**
+ * Wrong join codes one IP may try per window. Right codes don't count: a whole party
+ * joins from the same Wi-Fi, so it shares one public IP.
+ */
+export const WRONG_CODES_PER_WINDOW = 10;
+export const WRONG_CODE_WINDOW_MS = 60_000;
 
 function randomCode(): string {
 	const bytes = crypto.getRandomValues(new Uint8Array(CODE_LENGTH));
@@ -17,6 +23,8 @@ function randomCode(): string {
 export class Registry {
 	private parties = new Map<string, Party>();
 	private codes = new Map<string, string>();
+	/** Wrong codes per IP in its current window. */
+	private wrongCodes = new Map<string, { count: number; since: number }>();
 
 	create(now: number, settings?: Partial<PartySettings>): Party {
 		const party = new Party(now, settings);
@@ -36,6 +44,17 @@ export class Registry {
 		return party;
 	}
 
+	/** A guest at `ip` typed `code`. Only wrong codes count toward that IP's limit. */
+	join(code: string, ip: string, now: number): Party | 'bad-code' | 'rate-limited' {
+		let strikes = this.wrongCodes.get(ip);
+		if (strikes && now - strikes.since >= WRONG_CODE_WINDOW_MS) strikes = undefined;
+		if (strikes && strikes.count >= WRONG_CODES_PER_WINDOW) return 'rate-limited';
+		const party = this.byCode(code, now);
+		if (party) return party;
+		this.wrongCodes.set(ip, { count: (strikes?.count ?? 0) + 1, since: strikes?.since ?? now });
+		return 'bad-code';
+	}
+
 	end(party: Party): void {
 		this.parties.delete(party.id);
 		for (const [code, id] of this.codes) if (id === party.id) this.codes.delete(code);
@@ -45,6 +64,8 @@ export class Registry {
 	tick(now: number): { rotated: Party[]; expired: Party[] } {
 		const rotated: Party[] = [];
 		const expired: Party[] = [];
+		for (const [ip, strikes] of this.wrongCodes)
+			if (now - strikes.since >= WRONG_CODE_WINDOW_MS) this.wrongCodes.delete(ip);
 		for (const party of this.parties.values()) {
 			if (now - party.lastActivity > PARTY_TTL_MS) {
 				this.end(party);

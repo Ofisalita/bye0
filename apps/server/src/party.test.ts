@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import { DEFAULT_SETTINGS } from '@bye0/shared';
 import { youtubeId } from './matching';
 import { Party, type ResolvedTrack } from './party';
-import { CODE_GRACE_MS, CODE_ROTATE_MS, PARTY_TTL_MS, Registry } from './registry';
+import { CODE_GRACE_MS, CODE_ROTATE_MS, PARTY_TTL_MS, Registry, WRONG_CODE_WINDOW_MS, WRONG_CODES_PER_WINDOW } from './registry';
 
 const track = (title: string, candidates = 1, durationMs = 180_000): ResolvedTrack => ({
 	title,
@@ -143,6 +144,18 @@ describe('Party', () => {
 		expect(party.patchSettings({ ordering: 'nope' }, host)).toBe('bad-request');
 		expect(party.patchSettings({ ordering: 'fifo', governance: 'dictatorship' }, host)).toBeNull();
 		expect(party.settings.ordering).toBe('fifo');
+		// Names every plain object inherits must not count as strategies.
+		for (const id of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+			expect(party.patchSettings({ ordering: id }, host)).toBe('bad-request');
+			expect(party.patchSettings({ governance: id }, host)).toBe('bad-request');
+		}
+		expect(party.patchSettings({ skipThreshold: '0.5' as unknown as number }, host)).toBe('bad-request');
+	});
+
+	test('a party created with bogus settings falls back to the defaults and still works', () => {
+		const party = new Party(0, { ordering: 'constructor', governance: 'toString' });
+		expect(party.settings).toEqual(DEFAULT_SETTINGS);
+		expect(() => party.state(1)).not.toThrow();
 	});
 });
 
@@ -161,6 +174,20 @@ describe('Registry', () => {
 
 		expect(reg.tick(PARTY_TTL_MS + 1).expired).toEqual([party]);
 		expect(reg.get(party.id)).toBeUndefined();
+	});
+
+	test('join: a whole party may join from one IP, wrong codes from it are limited', () => {
+		const reg = new Registry();
+		const party = reg.create(0);
+		const ip = '203.0.113.7';
+		for (let i = 0; i < 3 * WRONG_CODES_PER_WINDOW; i++) expect(reg.join(party.code, ip, 1)).toBe(party);
+
+		for (let i = 0; i < WRONG_CODES_PER_WINDOW; i++) expect(reg.join('XXXX', ip, 2)).toBe('bad-code');
+		expect(reg.join(party.code, ip, 3)).toBe('rate-limited');
+		expect(reg.join(party.code, '198.51.100.1', 3)).toBe(party);
+
+		// The window starts at the first wrong code and doesn't slide.
+		expect(reg.join(party.code, ip, 2 + WRONG_CODE_WINDOW_MS)).toBe(party);
 	});
 });
 
