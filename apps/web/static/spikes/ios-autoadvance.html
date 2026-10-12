@@ -1,0 +1,57 @@
+<!doctype html>
+<!--
+	Spike for SPEC §9 risk 1: does iOS Safari auto-advance to the next YouTube video without another tap?
+	Open http://<your-lan-ip>:5173/spikes/ios-autoadvance.html on an iPhone, tap Start once, keep the screen on,
+	and watch the log. Each clip is cut to 20 s. PASS = all three reach PLAYING after a single tap.
+-->
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>bye0 spike: iOS auto-advance</title>
+		<style>
+			body { font: 16px system-ui; margin: 16px; background: #111318; color: #f2f3f5; }
+			#player { width: 100%; aspect-ratio: 16 / 9; background: #000; }
+			button { font: inherit; min-height: 44px; padding: 0 16px; margin: 12px 0; }
+			pre { white-space: pre-wrap; font-size: 13px; }
+		</style>
+	</head>
+	<body>
+		<div id="player"></div>
+		<button id="start" disabled>Start</button>
+		<pre id="log"></pre>
+		<script src="https://www.youtube.com/iframe_api"></script>
+		<script>
+			const CLIP_SECONDS = 20;
+			const videos = ['FGBhQbmPwH8', 'dQw4w9WgXcQ', '9bZkp7q19f0'];
+			const names = { '-1': 'UNSTARTED', 0: 'ENDED', 1: 'PLAYING', 2: 'PAUSED', 3: 'BUFFERING', 5: 'CUED' };
+			const t0 = Date.now();
+			const log = (line) => (document.getElementById('log').textContent += `${((Date.now() - t0) / 1000).toFixed(1)}s  ${line}\n`);
+			let index = 0;
+			let player;
+
+			const load = () => player.loadVideoById({ videoId: videos[index], startSeconds: 0, endSeconds: CLIP_SECONDS });
+
+			function onYouTubeIframeAPIReady() {
+				player = new YT.Player('player', {
+					playerVars: { playsinline: 1 },
+					events: {
+						onReady: () => (document.getElementById('start').disabled = false),
+						onStateChange: (e) => {
+							log(`video ${index + 1}/${videos.length}: ${names[e.data] ?? e.data}`);
+							if (e.data !== YT.PlayerState.ENDED) return;
+							if (++index < videos.length) load();
+							else log('done. PASS if every video reached PLAYING without another tap.');
+						},
+						onError: (e) => log(`video ${index + 1}: ERROR ${e.data}`)
+					}
+				});
+			}
+
+			document.getElementById('start').onclick = () => {
+				log(navigator.userAgent);
+				load();
+			};
+		</script>
+	</body>
+</html>
