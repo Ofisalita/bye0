@@ -25,7 +25,7 @@ export function youtubeId(input: string): string | null {
 
 /** The parts of nidol's `POST /resolve` response we use (contract: MATCHING_SERVICE.md in Ofisalita/nidol). */
 interface ResolveResponse {
-	canonical: { title: string; artists: string[]; durationMs: number | null };
+	canonical: { title: string; artists: string[]; durationMs: number | null; isLive?: boolean };
 	candidates: {
 		videoId: string;
 		title: string;
@@ -63,7 +63,8 @@ async function askNidol(baseUrl: string, input: string): Promise<ResolvedTrack |
 			confidence: c.confidence,
 			thumbnailUrl: c.thumbnailUrl
 		})),
-		needsConfirmation: body.needsConfirmation
+		needsConfirmation: body.needsConfirmation,
+		isLive: body.canonical.isLive
 	};
 }
 

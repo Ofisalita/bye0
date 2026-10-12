@@ -25,6 +25,8 @@ export interface ResolvedTrack {
 	candidates: Candidate[];
 	/** The matching service wasn't sure; the adder gets to pick. */
 	needsConfirmation?: boolean;
+	/** A live stream: no duration, and it never ends on its own. */
+	isLive?: boolean;
 }
 
 type Result = ErrorCode | null;
@@ -218,7 +220,7 @@ export class Party {
 		if (limited) return limited;
 		if (!track.candidates.length) return 'unresolvable';
 		const max = this.settings.maxDurationMs;
-		if (max !== null && track.durationMs > max) return 'too-long';
+		if (max !== null && (track.isLive || track.durationMs > max)) return 'too-long';
 		this.queue.push({
 			id: crypto.randomUUID(),
 			addedBy: by,
