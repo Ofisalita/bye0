@@ -51,6 +51,8 @@ export class PartyClient {
 		if ('nickname' in entry) localStorage.setItem(NICKNAME_KEY, entry.nickname);
 		this.entry = entry;
 		this.endReason = null;
+		addEventListener('online', this.wake);
+		document.addEventListener('visibilitychange', this.wake);
 		this.open();
 	}
 
@@ -62,18 +64,31 @@ export class PartyClient {
 		return true;
 	}
 
-	send(msg: ClientMessage): void {
-		if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
+	/** False when the connection is down and the message went nowhere. */
+	send(msg: ClientMessage): boolean {
+		if (this.ws?.readyState !== WebSocket.OPEN) return false;
+		this.ws.send(JSON.stringify(msg));
+		return true;
 	}
 
 	/** Drops the connection without leaving the party. */
 	close(): void {
 		clearTimeout(this.retry);
+		removeEventListener('online', this.wake);
+		document.removeEventListener('visibilitychange', this.wake);
 		this.entry = null;
 		this.ws?.close();
 		this.ws = null;
 		this.status = 'idle';
 	}
+
+	/**
+	 * The phone woke up, came back to this tab or found a network: reconnect now. Browsers slow
+	 * timers down in hidden tabs, so the retry that is pending may be a long way off.
+	 */
+	private wake = (): void => {
+		if (document.visibilityState === 'visible' && !this.ws && this.status === 'connecting') this.open();
+	};
 
 	private open(): void {
 		clearTimeout(this.retry);

@@ -332,11 +332,30 @@ describe('Party', () => {
 	});
 
 	test('a player coming back only takes the role if nobody else has it', () => {
-		const { party, host } = setup();
-		party.connect('conn-host-tv', host, 0);
-		expect(party.claimPlayer('conn-host', false)).toBeNull();
-		expect(party.claimPlayer('conn-host-tv', false)).toBe('not-allowed');
-		expect(party.claimPlayer('conn-host-tv')).toBeNull(); // an explicit tap still takes over
+		const { party, host, ana } = setup();
+		party.setRole(host, ana, 'cohost');
+		expect(party.claimPlayer('conn-ana', false)).toBeNull();
+		expect(party.claimPlayer('conn-host', false)).toBe('not-allowed');
+		expect(party.claimPlayer('conn-host')).toBeNull(); // an explicit tap still takes over
+	});
+
+	test('a player coming back takes the role from its own dead connection', () => {
+		const { party, host, ana } = setup();
+		party.start(host, 0);
+		party.add(ana, track('a1'), 1);
+		party.add(ana, track('a2'), 2);
+		party.claimPlayer('conn-host');
+		const itemId = party.nowPlaying!.item.id;
+		// The phone changed networks: it is back on a new socket before the server drops the old one.
+		party.connect('conn-host-2', host, 3);
+		expect(party.claimPlayer('conn-host-2', false)).toBeNull();
+		party.heartbeat('conn-host-2', itemId, 9_000, false, 4);
+		expect(party.nowPlaying?.positionMs).toBe(9_000);
+		// The old socket timing out later changes nothing.
+		party.disconnect('conn-host');
+		expect(party.state(5).playerId).toBe(host);
+		expect(party.ended('conn-host-2', itemId, 6)).toBe(true);
+		expect(party.nowPlaying?.item.title).toBe('a2');
 	});
 
 	test('collections: queued as stubs in album order, within the limits', () => {
