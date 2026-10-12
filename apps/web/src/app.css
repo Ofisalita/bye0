@@ -1,0 +1,140 @@
+/* Design tokens. A skin overrides these and nothing else. */
+:root {
+	--bg: #111318;
+	--surface: #1b1e26;
+	--surface-2: #262a35;
+	--text: #f2f3f5;
+	--text-dim: #9aa0ad;
+	--accent: #ff5c8a;
+	--accent-text: #14060b;
+	--danger: #ff6b5c;
+	--radius: 12px;
+	--gap: 12px;
+	--font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	color-scheme: dark;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--font);
+	line-height: 1.4;
+}
+
+h1,
+h2,
+p {
+	margin: 0;
+}
+
+h2 {
+	font-size: 0.8rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--text-dim);
+}
+
+button,
+input,
+select {
+	font: inherit;
+	color: inherit;
+}
+
+button {
+	min-height: 44px;
+	padding: 0 16px;
+	border: 0;
+	border-radius: var(--radius);
+	background: var(--surface-2);
+	cursor: pointer;
+}
+button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+button.primary {
+	background: var(--accent);
+	color: var(--accent-text);
+	font-weight: 700;
+}
+button.danger {
+	color: var(--danger);
+}
+button.small {
+	min-height: 32px;
+	padding: 0 10px;
+	font-size: 0.85rem;
+}
+
+input[type='text'],
+select {
+	min-height: 44px;
+	width: 100%;
+	padding: 0 12px;
+	border: 1px solid var(--surface-2);
+	border-radius: var(--radius);
+	background: var(--surface);
+}
+
+a {
+	color: var(--accent);
+}
+
+.page {
+	max-width: 560px;
+	/* minmax(0, …) lets long titles ellipsize instead of widening the page */
+	grid-template-columns: minmax(0, 1fr);
+	margin: 0 auto;
+	padding: 16px;
+	display: grid;
+	gap: 20px;
+}
+
+.card {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--gap);
+	padding: 16px;
+	border-radius: var(--radius);
+	background: var(--surface);
+}
+
+.row {
+	display: flex;
+	align-items: center;
+	gap: var(--gap);
+}
+.grow {
+	flex: 1;
+	min-width: 0;
+}
+.dim {
+	color: var(--text-dim);
+	font-size: 0.85rem;
+}
+.ellipsis {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.toast {
+	position: fixed;
+	left: 16px;
+	right: 16px;
+	bottom: 16px;
+	max-width: 528px;
+	margin: 0 auto;
+	padding: 12px 16px;
+	border-radius: var(--radius);
+	background: var(--danger);
+	color: var(--accent-text);
+	font-weight: 600;
+}
