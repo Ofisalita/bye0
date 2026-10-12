@@ -63,7 +63,14 @@ bye0 is in early development.
 
 ## Run your own
 
-there's no public bye0 yet, so for now you host it yourself. you need [Bun](https://bun.sh).
+there's no public bye0 yet, so for now you host it yourself. it runs on [Bun](https://bun.sh); if you
+don't have it, this installs it for your user (no sudo):
+
+```sh
+./scripts/install-bun.sh
+```
+
+then, in a new terminal:
 
 ```sh
 bun install
