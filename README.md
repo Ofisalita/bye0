@@ -33,6 +33,9 @@ you can change the rules mid-party. "who decides" has three settings:
 whatever the rules, you can kick people, and make a friend co-host so their device can take over the music
 if yours dies.
 
+on a wide screen, **Bigger queue** shrinks the video and gives the room to the list of upcoming songs.
+**Bigger video** switches back.
+
 **if you're a guest**
 
 1. scan the QR code (or open bye0 and type the code), then pick a nickname.

@@ -64,6 +64,8 @@
 	"player_start_hint": "Keep this screen on and this tab in front while the party is on.",
 	"player_not_allowed": "Only the host or a co-host can play the music.",
 	"player_join": "Join at {host}",
+	"player_layout_queue": "Bigger queue",
+	"player_layout_video": "Bigger video",
 	"back_to_party": "Back to the queue",
 	"language": "Language",
 	"error_bad_request": "That didn't work. Try again.",

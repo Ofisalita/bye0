@@ -64,6 +64,8 @@
 	"player_start_hint": "Mantén la pantalla encendida y esta pestaña al frente durante la fiesta.",
 	"player_not_allowed": "Solo el anfitrión o un coanfitrión puede reproducir la música.",
 	"player_join": "Únete en {host}",
+	"player_layout_queue": "Cola más grande",
+	"player_layout_video": "Video más grande",
 	"back_to_party": "Volver a la cola",
 	"language": "Idioma",
 	"error_bad_request": "Eso no funcionó. Intenta de nuevo.",
